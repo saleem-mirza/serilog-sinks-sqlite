@@ -92,7 +92,7 @@ namespace Serilog.Sinks.SQLite
         private void CreateSQLTable(SqliteConnection sqlConnection)
         {
             var colDefs = "id INTEGER PRIMARY KEY AUTOINCREMENT,";
-            colDefs += "Timestamp DATETIME,";
+            colDefs += "Timestamp TEXT,";
             colDefs += "Level VARCHAR(10),";
             colDefs += "Exception TEXT,";
             colDefs += "RenderedMessage TEXT,";
@@ -114,7 +114,7 @@ namespace Serilog.Sinks.SQLite
             sqlCommand.CommandText = sqlInsertText;
             sqlCommand.CommandType = CommandType.Text;
             
-            sqlCommand.Parameters.Add(new SqliteParameter("@timeStamp", DbType.String));
+            sqlCommand.Parameters.Add(new SqliteParameter("@timeStamp", DbType.DateTime2));
             sqlCommand.Parameters.Add(new SqliteParameter("@level", DbType.String));
             sqlCommand.Parameters.Add(new SqliteParameter("@exception", DbType.String));
             sqlCommand.Parameters.Add(new SqliteParameter("@renderedMessage", DbType.String));
