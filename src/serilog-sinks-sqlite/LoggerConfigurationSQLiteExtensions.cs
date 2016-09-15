@@ -35,11 +35,13 @@ namespace Serilog
         /// <param name="formatProvider">Supplies culture-specific formatting information, or null.</param>
         /// <exception cref="ArgumentNullException">A required parameter is null.</exception>
 
-        public static LoggerConfiguration SQLite(this LoggerSinkConfiguration loggerConfiguration,
+        public static LoggerConfiguration SQLite(
+            this LoggerSinkConfiguration loggerConfiguration,
             string sqliteDbPath,
             string tableName,
             LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum,
-            IFormatProvider formatProvider = null)
+            IFormatProvider formatProvider = null,
+            bool storeTimestampInUtc = true)
         {
             if (loggerConfiguration == null)
             {
@@ -57,7 +59,13 @@ namespace Serilog
                 Directory.CreateDirectory(baseDirectory);
             }
 
-            return loggerConfiguration.Sink(new SQLiteSink(sqliteDbPath, tableName, formatProvider, false), restrictedToMinimumLevel);
+            return loggerConfiguration.Sink(
+                new SQLiteSink(
+                    sqliteDbPath, 
+                    tableName, 
+                    formatProvider, 
+                    storeTimestampInUtc), 
+                restrictedToMinimumLevel);
         }
     }
 }

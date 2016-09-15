@@ -14,11 +14,8 @@
 
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Data;
-using System.Data.SQLite;
-using System.Linq;
-using System.Text;
+using Microsoft.Data.Sqlite;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -34,9 +31,8 @@ namespace Serilog.Sinks.SQLite
         private string _tableName;
         private IFormatProvider _formatProvider;
         private bool _storeTimestampInUtc;
-
-        private SQLiteConnection _sqlConnection;
-        private SQLiteCommand _sqlCommand;
+        private SqliteConnection _sqlConnection;
+        private SqliteCommand _sqlCommand;
         private BlockingCollection<LogEvent> _messageQueue;
         private Thread _workerThread;
         private CancellationTokenSource _cancellationToken = new CancellationTokenSource();
@@ -46,6 +42,7 @@ namespace Serilog.Sinks.SQLite
             IFormatProvider formatProvider,
             bool storeTimestampInUtc)
         {
+           
             _sqliteDbPath = sqlLiteDbPath;
             _tableName = tableName;
             _formatProvider = formatProvider;
@@ -85,18 +82,17 @@ namespace Serilog.Sinks.SQLite
 
         private void InitializeDatabase()
         {
-            _sqlConnection = new SQLiteConnection(string.Format("Data Source={0};Version=3", _sqliteDbPath));
+            _sqlConnection = new SqliteConnection(string.Format("Data Source={0}", _sqliteDbPath));
             _sqlConnection.Open();
 
             CreateSQLTable(_sqlConnection);
             _sqlCommand = CreateSQLInsertCommand(_sqlConnection);
         }
 
-        private void CreateSQLTable(SQLiteConnection sqlConnection)
+        private void CreateSQLTable(SqliteConnection sqlConnection)
         {
             var colDefs = "id INTEGER PRIMARY KEY AUTOINCREMENT,";
             colDefs += "Timestamp DATETIME,";
-            colDefs += "UTimestamp NUMERIC,";
             colDefs += "Level VARCHAR(10),";
             colDefs += "Exception TEXT,";
             colDefs += "RenderedMessage TEXT,";
@@ -104,25 +100,25 @@ namespace Serilog.Sinks.SQLite
 
             var sqlCreateText = string.Format("CREATE TABLE IF NOT EXISTS {0} ({1})", _tableName, colDefs);
 
-            var sqlCommand = new SQLiteCommand(sqlConnection);
-            sqlCommand.CommandText = sqlCreateText;
+            var sqlCommand = new SqliteCommand(sqlCreateText, sqlConnection);
             sqlCommand.ExecuteNonQuery();
         }
 
-        private SQLiteCommand CreateSQLInsertCommand(SQLiteConnection connection)
+        private SqliteCommand CreateSQLInsertCommand(SqliteConnection connection)
         {
-            var _sqlInsertText = "INSERT INTO {0} (Timestamp, UTimestamp, Level, Exception, RenderedMessage, Properties)";
-            _sqlInsertText += " VALUES (@timeStamp, @uTimeStamp, @level, @exception, @renderedMessage, @properties)";
-            _sqlInsertText = string.Format(_sqlInsertText, _tableName);
+            var sqlInsertText = "INSERT INTO {0} (Timestamp, Level, Exception, RenderedMessage, Properties)";
+            sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
+            sqlInsertText = string.Format(sqlInsertText, _tableName);
 
-            var sqlCommand = new SQLiteCommand(connection);
-            sqlCommand.CommandText = _sqlInsertText;
-            sqlCommand.Parameters.Add(new SQLiteParameter("@TimeStamp", DbType.DateTime));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@uTimeStamp", DbType.UInt64));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@level", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@exception", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@renderedMessage", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@properties", DbType.String));
+            var sqlCommand = _sqlConnection.CreateCommand();
+            sqlCommand.CommandText = sqlInsertText;
+            sqlCommand.CommandType = CommandType.Text;
+            
+            sqlCommand.Parameters.Add(new SqliteParameter("@timeStamp", DbType.String));
+            sqlCommand.Parameters.Add(new SqliteParameter("@level", DbType.String));
+            sqlCommand.Parameters.Add(new SqliteParameter("@exception", DbType.String));
+            sqlCommand.Parameters.Add(new SqliteParameter("@renderedMessage", DbType.String));
+            sqlCommand.Parameters.Add(new SqliteParameter("@properties", DbType.String));
 
             sqlCommand.Prepare();
             return sqlCommand;
@@ -144,8 +140,7 @@ namespace Serilog.Sinks.SQLite
 
                 var eventTime = dataLogEvent.Timestamp.Ticks;
 
-                _sqlCommand.Parameters["@TimeStamp"].Value = new DateTime(eventTime);
-                _sqlCommand.Parameters["@uTimeStamp"].Value = eventTime;
+                _sqlCommand.Parameters["@timeStamp"].Value = new DateTime(eventTime);
                 _sqlCommand.Parameters["@level"].Value = dataLogEvent.Level;
                 if (dataLogEvent.Exception != null)
                 {
