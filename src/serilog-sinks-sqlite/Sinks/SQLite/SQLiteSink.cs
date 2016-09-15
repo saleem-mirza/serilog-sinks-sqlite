@@ -123,30 +123,25 @@ namespace Serilog.Sinks.SQLite
             return sqlCommand;
         }
 
-        private Data.LogEvent ConvertLogEventToDataEvent(LogEvent logEvent)
-        {
-            return new Data.LogEvent(
-                logEvent,
-                logEvent.RenderMessage(_formatProvider),
-                _storeTimestampInUtc);
-        }
-
         private async Task WriteLogEvent(LogEvent logEvent)
         {
             try
             {
-                var dataLogEvent = ConvertLogEventToDataEvent(logEvent);
-
-                var eventTime = dataLogEvent.Timestamp.Ticks;
-
-                _sqlCommand.Parameters["@timeStamp"].Value = new DateTime(eventTime);
-                _sqlCommand.Parameters["@level"].Value = dataLogEvent.Level;
-                if (dataLogEvent.Exception != null)
+                if (_storeTimestampInUtc)
                 {
-                    _sqlCommand.Parameters["@exception"].Value = dataLogEvent.Exception.ToString();
+                    _sqlCommand.Parameters["@timeStamp"].Value = logEvent.Timestamp.ToUniversalTime();
                 }
-                _sqlCommand.Parameters["@renderedMessage"].Value = dataLogEvent.RenderedMessage;
-                _sqlCommand.Parameters["@properties"].Value = JsonConvert.SerializeObject(dataLogEvent.Properties);
+                else
+                {
+                    _sqlCommand.Parameters["@timeStamp"].Value = logEvent.Timestamp;
+                }
+                _sqlCommand.Parameters["@level"].Value = logEvent.Level;
+                if (logEvent.Exception != null)
+                {
+                    _sqlCommand.Parameters["@exception"].Value = logEvent.Exception.ToString();
+                }
+                _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
+                _sqlCommand.Parameters["@properties"].Value = JsonConvert.SerializeObject(logEvent.Properties);
 
                 await _sqlCommand.ExecuteNonQueryAsync();
 

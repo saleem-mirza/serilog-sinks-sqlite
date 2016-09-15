@@ -94,8 +94,6 @@
   <ItemGroup>
     <Compile Include="LoggerConfigurationSQLiteExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Sinks\SQLite\Data\LogEvent.cs" />
-    <Compile Include="Sinks\SQLite\SQLitePropertyFormatter.cs" />
     <Compile Include="Sinks\SQLite\SQLiteSink.cs" />
   </ItemGroup>
   <ItemGroup>
