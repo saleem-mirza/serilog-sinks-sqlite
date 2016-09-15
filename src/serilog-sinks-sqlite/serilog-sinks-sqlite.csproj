@@ -8,8 +8,8 @@
     <ProjectGuid>{45B65024-F553-4CDD-9ED2-C4875E5AA1BF}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>serilog_sinks_sqlite</RootNamespace>
-    <AssemblyName>serilog-sinks-sqlite</AssemblyName>
+    <RootNamespace>Serilog</RootNamespace>
+    <AssemblyName>Serilog.Sinks.SQLite</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <NuGetPackageImportStamp>
