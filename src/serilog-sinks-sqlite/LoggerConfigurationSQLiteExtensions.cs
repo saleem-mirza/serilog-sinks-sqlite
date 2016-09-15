@@ -33,8 +33,8 @@ namespace Serilog
         /// <param name="tableName">The name of the SQLite table to store log.</param>
         /// <param name="restrictedToMinimumLevel">The minimum log event level required in order to write an event to the sink.</param>
         /// <param name="formatProvider">Supplies culture-specific formatting information, or null.</param>
+        /// <param name="storeTimestampInUtc">Store timestamp in UTC format</param>
         /// <exception cref="ArgumentNullException">A required parameter is null.</exception>
-
         public static LoggerConfiguration SQLite(
             this LoggerSinkConfiguration loggerConfiguration,
             string sqliteDbPath,
@@ -50,11 +50,11 @@ namespace Serilog
 
             if (string.IsNullOrEmpty(sqliteDbPath))
             {
-                throw new ArgumentNullException("sqlLiteDbPath");
+                throw new ArgumentNullException("sqliteDbPath");
             }
 
             var baseDirectory = Path.GetDirectoryName(sqliteDbPath);
-            if (!Directory.Exists(baseDirectory))
+            if (baseDirectory != null && !Directory.Exists(baseDirectory))
             {
                 Directory.CreateDirectory(baseDirectory);
             }

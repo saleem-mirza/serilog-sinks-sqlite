@@ -27,15 +27,15 @@ namespace Serilog.Sinks.SQLite
 {
     public class SQLiteSink : ILogEventSink, IDisposable
     {
-        private string _sqliteDbPath;
-        private string _tableName;
-        private IFormatProvider _formatProvider;
-        private bool _storeTimestampInUtc;
+        private readonly string _sqliteDbPath;
+        private readonly string _tableName;
+        private readonly IFormatProvider _formatProvider;
+        private readonly bool _storeTimestampInUtc;
         private SqliteConnection _sqlConnection;
         private SqliteCommand _sqlCommand;
-        private BlockingCollection<LogEvent> _messageQueue;
-        private Thread _workerThread;
-        private CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+        private readonly BlockingCollection<LogEvent> _messageQueue;
+        private readonly Thread _workerThread;
+        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
 
         public SQLiteSink(string sqlLiteDbPath,
             string tableName,
@@ -51,7 +51,7 @@ namespace Serilog.Sinks.SQLite
 
             InitializeDatabase();
 
-            _workerThread = new Thread( async () =>
+            _workerThread = new Thread(async () =>
             {
                 LogEvent logEvent = null;
                 try
@@ -71,12 +71,11 @@ namespace Serilog.Sinks.SQLite
 
                     SelfLog.WriteLine(e.Message);
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     SelfLog.WriteLine(e.Message);
                 }
-            });
-
+            }) {IsBackground = true};
             _workerThread.Start();
         }
 
@@ -85,11 +84,11 @@ namespace Serilog.Sinks.SQLite
             _sqlConnection = new SqliteConnection(string.Format("Data Source={0}", _sqliteDbPath));
             _sqlConnection.Open();
 
-            CreateSQLTable(_sqlConnection);
-            _sqlCommand = CreateSQLInsertCommand(_sqlConnection);
+            CreateSqlTable(_sqlConnection);
+            _sqlCommand = CreateSqlInsertCommand(_sqlConnection);
         }
 
-        private void CreateSQLTable(SqliteConnection sqlConnection)
+        private void CreateSqlTable(SqliteConnection sqlConnection)
         {
             var colDefs = "id INTEGER PRIMARY KEY AUTOINCREMENT,";
             colDefs += "Timestamp TEXT,";
@@ -104,7 +103,7 @@ namespace Serilog.Sinks.SQLite
             sqlCommand.ExecuteNonQuery();
         }
 
-        private SqliteCommand CreateSQLInsertCommand(SqliteConnection connection)
+        private SqliteCommand CreateSqlInsertCommand(SqliteConnection connection)
         {
             var sqlInsertText = "INSERT INTO {0} (Timestamp, Level, Exception, RenderedMessage, Properties)";
             sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
