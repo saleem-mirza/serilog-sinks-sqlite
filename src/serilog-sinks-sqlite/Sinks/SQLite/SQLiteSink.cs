@@ -135,16 +135,19 @@ namespace Serilog.Sinks.SQLite
                 {
                     _sqlCommand.Parameters["@timeStamp"].Value = logEvent.Timestamp;
                 }
-                _sqlCommand.Parameters["@level"].Value = logEvent.Level;
+                _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                 if (logEvent.Exception != null)
                 {
                     _sqlCommand.Parameters["@exception"].Value = logEvent.Exception.ToString();
+                }
+                else
+                {
+                    _sqlCommand.Parameters["@exception"].Value = string.Empty;
                 }
                 _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
                 _sqlCommand.Parameters["@properties"].Value = JsonConvert.SerializeObject(logEvent.Properties);
 
                 await _sqlCommand.ExecuteNonQueryAsync();
-
             }
             catch (Exception e)
             {
