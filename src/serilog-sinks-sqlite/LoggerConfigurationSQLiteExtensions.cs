@@ -38,19 +38,19 @@ namespace Serilog
         public static LoggerConfiguration SQLite(
             this LoggerSinkConfiguration loggerConfiguration,
             string sqliteDbPath,
-            string tableName,
+            string tableName = "Logs",
             LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum,
             IFormatProvider formatProvider = null,
-            bool storeTimestampInUtc = true)
+            bool storeTimestampInUtc = false)
         {
             if (loggerConfiguration == null)
             {
-                throw new ArgumentNullException("loggerConfiguration");
+                throw new ArgumentNullException(nameof(loggerConfiguration));
             }
 
             if (string.IsNullOrEmpty(sqliteDbPath))
             {
-                throw new ArgumentNullException("sqliteDbPath");
+                throw new ArgumentNullException(nameof(sqliteDbPath));
             }
 
             var baseDirectory = Path.GetDirectoryName(sqliteDbPath);

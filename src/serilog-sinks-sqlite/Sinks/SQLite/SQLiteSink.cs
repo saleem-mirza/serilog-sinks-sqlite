@@ -25,24 +25,26 @@ using Serilog.Events;
 
 namespace Serilog.Sinks.SQLite
 {
-    public class SQLiteSink : ILogEventSink, IDisposable
+    internal class SQLiteSink : ILogEventSink, IDisposable
     {
-        private readonly string _sqliteDbPath;
         private readonly string _tableName;
-        private readonly IFormatProvider _formatProvider;
+        private readonly string _sqliteDbPath;
         private readonly bool _storeTimestampInUtc;
-        private SqliteConnection _sqlConnection;
-        private SqliteCommand _sqlCommand;
-        private readonly BlockingCollection<LogEvent> _messageQueue;
+
         private readonly Thread _workerThread;
+        private readonly IFormatProvider _formatProvider;
+        private readonly BlockingCollection<LogEvent> _messageQueue;
         private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+
+        private SqliteCommand _sqlCommand;
+        private SqliteConnection _sqlConnection;
 
         public SQLiteSink(string sqlLiteDbPath,
             string tableName,
             IFormatProvider formatProvider,
             bool storeTimestampInUtc)
         {
-           
+
             _sqliteDbPath = sqlLiteDbPath;
             _tableName = tableName;
             _formatProvider = formatProvider;
@@ -75,13 +77,14 @@ namespace Serilog.Sinks.SQLite
                 {
                     SelfLog.WriteLine(e.Message);
                 }
-            }) {IsBackground = true};
+            })
+            { IsBackground = true };
             _workerThread.Start();
         }
 
         private void InitializeDatabase()
         {
-            _sqlConnection = new SqliteConnection(string.Format("Data Source={0}", _sqliteDbPath));
+            _sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
             _sqlConnection.Open();
 
             CreateSqlTable(_sqlConnection);
@@ -97,7 +100,7 @@ namespace Serilog.Sinks.SQLite
             colDefs += "RenderedMessage TEXT,";
             colDefs += "Properties TEXT";
 
-            var sqlCreateText = string.Format("CREATE TABLE IF NOT EXISTS {0} ({1})", _tableName, colDefs);
+            var sqlCreateText = $"CREATE TABLE IF NOT EXISTS {_tableName} ({colDefs})";
 
             var sqlCommand = new SqliteCommand(sqlCreateText, sqlConnection);
             sqlCommand.ExecuteNonQuery();
@@ -112,7 +115,7 @@ namespace Serilog.Sinks.SQLite
             var sqlCommand = _sqlConnection.CreateCommand();
             sqlCommand.CommandText = sqlInsertText;
             sqlCommand.CommandType = CommandType.Text;
-            
+
             sqlCommand.Parameters.Add(new SqliteParameter("@timeStamp", DbType.DateTime2));
             sqlCommand.Parameters.Add(new SqliteParameter("@level", DbType.String));
             sqlCommand.Parameters.Add(new SqliteParameter("@exception", DbType.String));
@@ -127,23 +130,9 @@ namespace Serilog.Sinks.SQLite
         {
             try
             {
-                if (_storeTimestampInUtc)
-                {
-                    _sqlCommand.Parameters["@timeStamp"].Value = logEvent.Timestamp.ToUniversalTime();
-                }
-                else
-                {
-                    _sqlCommand.Parameters["@timeStamp"].Value = logEvent.Timestamp;
-                }
+                _sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc ? logEvent.Timestamp.ToUniversalTime() : logEvent.Timestamp;
                 _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                if (logEvent.Exception != null)
-                {
-                    _sqlCommand.Parameters["@exception"].Value = logEvent.Exception.ToString();
-                }
-                else
-                {
-                    _sqlCommand.Parameters["@exception"].Value = string.Empty;
-                }
+                _sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
                 _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
                 _sqlCommand.Parameters["@properties"].Value = JsonConvert.SerializeObject(logEvent.Properties);
 
@@ -157,15 +146,15 @@ namespace Serilog.Sinks.SQLite
 
         public void Emit(LogEvent logEvent)
         {
-            _messageQueue.Add(logEvent);            
+            _messageQueue.Add(logEvent);
         }
 
         #region IDisposable Support
-        private bool disposedValue = false; // To detect redundant calls
+        private bool _disposedValue = false; // To detect redundant calls
 
         protected virtual void Dispose(bool disposing)
         {
-            if (!disposedValue)
+            if (!_disposedValue)
             {
                 if (disposing)
                 {
@@ -179,7 +168,7 @@ namespace Serilog.Sinks.SQLite
 
                 }
 
-                disposedValue = true;
+                _disposedValue = true;
             }
         }
 
