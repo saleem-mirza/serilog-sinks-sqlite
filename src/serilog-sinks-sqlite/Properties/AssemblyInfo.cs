@@ -5,13 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("serilog-sinks-sqlite")]
-[assembly: AssemblyDescription("")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("serilog-sinks-sqlite")]
+[assembly: AssemblyDescription("Write Serilog events to SQLite database")]
 [assembly: AssemblyCopyright("Copyright ©  2016")]
+[assembly: AssemblyTitle("Serilog.Sinks.SQLite")]
+[assembly: AssemblyConfiguration("")]
 [assembly: AssemblyTrademark("")]
+[assembly: AssemblyCompany("")]
 [assembly: AssemblyCulture("")]
 
 // Setting ComVisible to false makes the types in this assembly not visible 
