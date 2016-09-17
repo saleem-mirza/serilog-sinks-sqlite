@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Data;
 using Microsoft.Data.Sqlite;
 using System.Threading;
@@ -27,14 +28,23 @@ namespace Serilog.Sinks.SQLite
 {
     internal class SQLiteSink : ILogEventSink, IDisposable
     {
+        private const int BatchSize = 250;
+        private bool _canStop;
+
         private readonly string _tableName;
         private readonly string _sqliteDbPath;
         private readonly bool _storeTimestampInUtc;
 
+        private readonly Task _timerTask;
         private readonly Thread _workerThread;
         private readonly IFormatProvider _formatProvider;
+        private readonly List<LogEvent> _logEventBatch;
         private readonly BlockingCollection<LogEvent> _messageQueue;
         private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
+
+        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
+        private readonly ManualResetEventSlim _emitResetEvent = new ManualResetEventSlim(true);
 
         private SqliteCommand _sqlCommand;
         private SqliteConnection _sqlConnection;
@@ -50,36 +60,84 @@ namespace Serilog.Sinks.SQLite
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
             _messageQueue = new BlockingCollection<LogEvent>();
+            _logEventBatch = new List<LogEvent>();
 
             InitializeDatabase();
 
-            _workerThread = new Thread(async () =>
+            _workerThread = new Thread(Pump)
             {
-                LogEvent logEvent = null;
+                IsBackground = true
+            };
+            _workerThread.Start();
+
+            _timerTask = Task.Factory.StartNew(TimerPump);
+        }
+
+        private void TimerPump()
+        {
+            while (!_canStop)
+            {
+                _timerResetEvent.WaitOne(_thresholdTimeSpan);
+                _emitResetEvent.Reset();
                 try
                 {
-                    while (true)
+                    Task.Delay(500);
+                    if (_logEventBatch.Count <= 0)
                     {
-                        logEvent = _messageQueue.Take(_cancellationToken.Token);
-                        await WriteLogEvent(logEvent);
-                    }
-                }
-                catch (OperationCanceledException e)
-                {
-                    foreach (var msg in _messageQueue)
-                    {
-                        await WriteLogEvent(logEvent);
+                        continue;
                     }
 
-                    SelfLog.WriteLine(e.Message);
+                    FlushLogEventBatch();
                 }
-                catch (Exception e)
+                finally
                 {
-                    SelfLog.WriteLine(e.Message);
+                    _emitResetEvent.Set();
                 }
-            })
-            { IsBackground = true };
-            _workerThread.Start();
+            }
+        }
+
+        private void FlushLogEventBatch()
+        {
+            lock (this)
+            {
+                WriteLogEvent(_logEventBatch).Wait();
+                _logEventBatch.Clear();
+            }
+        }
+
+        private void Pump()
+        {
+            try
+            {
+                while (true)
+                {
+                    var logEvent = _messageQueue.Take(_cancellationToken.Token);
+
+                    _emitResetEvent.Wait();
+                    _logEventBatch.Add(logEvent);
+                    if (_logEventBatch.Count < BatchSize)
+                    {
+                        continue;
+                    }
+
+                    FlushLogEventBatch();
+                }
+            }
+            catch (OperationCanceledException e)
+            {
+                _canStop = true;
+                _timerResetEvent.Set();
+                _emitResetEvent.Set();
+
+                _timerTask.Wait();
+
+                WriteLogEvent(_messageQueue.ToArray()).Wait();
+                SelfLog.WriteLine(e.Message);
+            }
+            catch (Exception e)
+            {
+                SelfLog.WriteLine(e.Message);
+            }
         }
 
         private void InitializeDatabase()
@@ -112,7 +170,7 @@ namespace Serilog.Sinks.SQLite
             sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
             sqlInsertText = string.Format(sqlInsertText, _tableName);
 
-            var sqlCommand = _sqlConnection.CreateCommand();
+            var sqlCommand = connection.CreateCommand();
             sqlCommand.CommandText = sqlInsertText;
             sqlCommand.CommandType = CommandType.Text;
 
@@ -144,13 +202,39 @@ namespace Serilog.Sinks.SQLite
             }
         }
 
+        private async Task WriteLogEvent(ICollection<LogEvent> logEventsBatch)
+        {
+            if (logEventsBatch == null || logEventsBatch.Count == 0)
+            {
+                return;
+            }
+
+            using (var tr = _sqlConnection.BeginTransaction())
+            {
+                try
+                {
+                    _sqlCommand.Transaction = tr;
+                    foreach (var logEvent in logEventsBatch)
+                    {
+                        await WriteLogEvent(logEvent);
+                    }
+
+                    tr.Commit();
+                }
+                finally
+                {
+                    _sqlCommand.Transaction = null;
+                }
+            }
+        }
+
         public void Emit(LogEvent logEvent)
         {
             _messageQueue.Add(logEvent);
         }
 
         #region IDisposable Support
-        private bool _disposedValue = false; // To detect redundant calls
+        private bool _disposedValue; // To detect redundant calls
 
         protected virtual void Dispose(bool disposing)
         {
