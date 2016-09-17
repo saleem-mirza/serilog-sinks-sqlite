@@ -1,7 +1,14 @@
+version: 1.1.{build}
 configuration: Release
-
+platform: Any CPU
+nuget:
+  project_feed: true
 before_build:
-  - nuget restore
-  
+- cmd: nuget restore
 build:
+  project: serilog-sinks-sqlite.sln
+  publish_nuget: true
+  include_nuget_references: true
   verbosity: minimal
+deploy:
+- provider: NuGet

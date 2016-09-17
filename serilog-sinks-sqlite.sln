@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "serilog-sinks-sqlite", "src\serilog-sinks-sqlite\serilog-sinks-sqlite.csproj", "{45B65024-F553-4CDD-9ED2-C4875E5AA1BF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serilog.Sinks.SQLite", "src\serilog-sinks-sqlite\Serilog.Sinks.SQLite.csproj", "{45B65024-F553-4CDD-9ED2-C4875E5AA1BF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
