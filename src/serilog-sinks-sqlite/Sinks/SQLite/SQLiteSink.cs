@@ -16,9 +16,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
-using Microsoft.Data.Sqlite;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 using Serilog.Core;
 using Serilog.Debugging;
@@ -28,23 +28,10 @@ namespace Serilog.Sinks.SQLite
 {
     internal class SQLiteSink : ILogEventSink, IDisposable
     {
-        private const int BatchSize = 250;
-        private bool _canStop;
-
-        private readonly string _tableName;
+        private readonly IFormatProvider _formatProvider;
         private readonly string _sqliteDbPath;
         private readonly bool _storeTimestampInUtc;
-
-        private readonly Task _timerTask;
-        private readonly Thread _workerThread;
-        private readonly IFormatProvider _formatProvider;
-        private readonly List<LogEvent> _logEventBatch;
-        private readonly BlockingCollection<LogEvent> _messageQueue;
-        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
-        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
-
-        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
-        private readonly ManualResetEventSlim _emitResetEvent = new ManualResetEventSlim(true);
+        private readonly string _tableName;
 
         private SqliteCommand _sqlCommand;
         private SqliteConnection _sqlConnection;
@@ -54,12 +41,11 @@ namespace Serilog.Sinks.SQLite
             IFormatProvider formatProvider,
             bool storeTimestampInUtc)
         {
-
             _sqliteDbPath = sqlLiteDbPath;
             _tableName = tableName;
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
-            _messageQueue = new BlockingCollection<LogEvent>();
+            _messageQueue = new BlockingCollection<IList<LogEvent>>();
             _logEventBatch = new List<LogEvent>();
 
             InitializeDatabase();
@@ -73,72 +59,18 @@ namespace Serilog.Sinks.SQLite
             _timerTask = Task.Factory.StartNew(TimerPump);
         }
 
-        private void TimerPump()
-        {
-            while (!_canStop)
-            {
-                _timerResetEvent.WaitOne(_thresholdTimeSpan);
-                _emitResetEvent.Reset();
-                try
-                {
-                    Task.Delay(500);
-                    if (_logEventBatch.Count <= 0)
-                    {
-                        continue;
-                    }
+        #region ILogEvent implementation
 
-                    FlushLogEventBatch();
-                }
-                finally
-                {
-                    _emitResetEvent.Set();
-                }
+        public void Emit(LogEvent logEvent)
+        {
+            _logEventBatch.Add(logEvent);
+            if (_logEventBatch.Count >= BatchSize)
+            {
+                FlushLogEventBatch();
             }
         }
 
-        private void FlushLogEventBatch()
-        {
-            lock (this)
-            {
-                WriteLogEvent(_logEventBatch).Wait();
-                _logEventBatch.Clear();
-            }
-        }
-
-        private void Pump()
-        {
-            try
-            {
-                while (true)
-                {
-                    var logEvent = _messageQueue.Take(_cancellationToken.Token);
-
-                    _emitResetEvent.Wait();
-                    _logEventBatch.Add(logEvent);
-                    if (_logEventBatch.Count < BatchSize)
-                    {
-                        continue;
-                    }
-
-                    FlushLogEventBatch();
-                }
-            }
-            catch (OperationCanceledException e)
-            {
-                _canStop = true;
-                _timerResetEvent.Set();
-                _emitResetEvent.Set();
-
-                _timerTask.Wait();
-
-                WriteLogEvent(_messageQueue.ToArray()).Wait();
-                SelfLog.WriteLine(e.Message);
-            }
-            catch (Exception e)
-            {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
+        #endregion
 
         private void InitializeDatabase()
         {
@@ -184,15 +116,79 @@ namespace Serilog.Sinks.SQLite
             return sqlCommand;
         }
 
+        #region Parallel and Buffered implementation
+
+        private const int BatchSize = 250;
+        private bool _canStop;
+
+        private readonly Task _timerTask;
+        private readonly Thread _workerThread;
+        private readonly List<LogEvent> _logEventBatch;
+        private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
+        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
+        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
+
+        private void TimerPump()
+        {
+            while (!_canStop)
+            {
+                _timerResetEvent.WaitOne(_thresholdTimeSpan);
+                FlushLogEventBatch();
+            }
+        }
+
+        private void FlushLogEventBatch()
+        {
+            lock (this)
+            {
+                _messageQueue.Add(_logEventBatch.ToArray());
+                _logEventBatch.Clear();
+            }
+        }
+
+        private void Pump()
+        {
+            try
+            {
+                while (true)
+                {
+                    var logEvents = _messageQueue.Take(_cancellationToken.Token);
+                    WriteLogEvent(logEvents).Wait();
+                }
+            }
+            catch (OperationCanceledException e)
+            {
+                _canStop = true;
+                _timerResetEvent.Set();
+                _timerTask.Wait();
+
+                IList<LogEvent> eventBatch;
+                while (_messageQueue.TryTake(out eventBatch))
+                {
+                    WriteLogEvent(eventBatch).Wait();
+                }
+                SelfLog.WriteLine(e.Message);
+            }
+            catch (Exception e)
+            {
+                SelfLog.WriteLine(e.Message);
+            }
+        }
+
         private async Task WriteLogEvent(LogEvent logEvent)
         {
             try
             {
-                _sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc ? logEvent.Timestamp.ToUniversalTime() : logEvent.Timestamp;
+                _sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
+                    ? logEvent.Timestamp.ToUniversalTime()
+                    : logEvent.Timestamp;
                 _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                 _sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
                 _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
-                _sqlCommand.Parameters["@properties"].Value = JsonConvert.SerializeObject(logEvent.Properties);
+                _sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
+                    ? JsonConvert.SerializeObject(logEvent.Properties)
+                    : string.Empty;
 
                 await _sqlCommand.ExecuteNonQueryAsync();
             }
@@ -228,12 +224,10 @@ namespace Serilog.Sinks.SQLite
             }
         }
 
-        public void Emit(LogEvent logEvent)
-        {
-            _messageQueue.Add(logEvent);
-        }
+        #endregion
 
         #region IDisposable Support
+
         private bool _disposedValue; // To detect redundant calls
 
         protected virtual void Dispose(bool disposing)
@@ -249,7 +243,6 @@ namespace Serilog.Sinks.SQLite
                     {
                         _sqlConnection.Close();
                     }
-
                 }
 
                 _disposedValue = true;

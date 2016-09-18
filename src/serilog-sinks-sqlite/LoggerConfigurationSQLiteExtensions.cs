@@ -21,12 +21,12 @@ using Serilog.Sinks.SQLite;
 namespace Serilog
 {
     /// <summary>
-    /// Adds the WriteTo.SQLite() extension method to <see cref="LoggerConfiguration"/>.
+    ///     Adds the WriteTo.SQLite() extension method to <see cref="LoggerConfiguration" />.
     /// </summary>
     public static class LoggerConfigurationSQLiteExtensions
     {
         /// <summary>
-        /// Adds a sink that writes log events to a SQLite database.
+        ///     Adds a sink that writes log events to a SQLite database.
         /// </summary>
         /// <param name="loggerConfiguration">The logger configuration.</param>
         /// <param name="sqliteDbPath">The path of SQLite db.</param>
@@ -61,10 +61,10 @@ namespace Serilog
 
             return loggerConfiguration.Sink(
                 new SQLiteSink(
-                    sqliteDbPath, 
-                    tableName, 
-                    formatProvider, 
-                    storeTimestampInUtc), 
+                    sqliteDbPath,
+                    tableName,
+                    formatProvider,
+                    storeTimestampInUtc),
                 restrictedToMinimumLevel);
         }
     }
