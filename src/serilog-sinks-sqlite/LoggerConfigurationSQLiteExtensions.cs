@@ -53,15 +53,12 @@ namespace Serilog
                 throw new ArgumentNullException(nameof(sqliteDbPath));
             }
 
-            var baseDirectory = Path.GetDirectoryName(sqliteDbPath);
-            if (baseDirectory != null && !Directory.Exists(baseDirectory))
-            {
-                Directory.CreateDirectory(baseDirectory);
-            }
+            var sqliteDbFile = new FileInfo(sqliteDbPath);
+            sqliteDbFile.Directory?.Create();
 
             return loggerConfiguration.Sink(
                 new SQLiteSink(
-                    sqliteDbPath,
+                    sqliteDbFile.FullName,
                     tableName,
                     formatProvider,
                     storeTimestampInUtc),

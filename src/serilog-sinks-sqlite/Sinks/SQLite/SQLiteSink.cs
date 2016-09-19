@@ -74,11 +74,22 @@ namespace Serilog.Sinks.SQLite
 
         private void InitializeDatabase()
         {
-            _sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
-            _sqlConnection.Open();
+            _sqlConnection = GetSqLiteConnection();
 
             CreateSqlTable(_sqlConnection);
             _sqlCommand = CreateSqlInsertCommand(_sqlConnection);
+        }
+
+        private SqliteConnection GetSqLiteConnection()
+        {
+            if (_sqlConnection != null && _sqlConnection.State != ConnectionState.Closed)
+            {
+                return _sqlConnection;
+            }
+
+            var sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
+            sqlConnection.Open();
+            return sqlConnection;
         }
 
         private void CreateSqlTable(SqliteConnection sqlConnection)
