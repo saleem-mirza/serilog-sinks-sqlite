@@ -12,7 +12,7 @@ Configure logger by calling `WriteTo.SQLite()`
 
 ```C#
 var logger = new LoggerConfiguration()
-    .WriteTo.SQLite(@"C:\temp\log.db")
+    .WriteTo.SQLite(@"Logs\log.db")
     .CreateLogger();
     
 logger.Information("This informational message will be written to SQLite database");
@@ -25,7 +25,7 @@ To use the rolling file sink with the [Serilog.Settings.AppSettings](https://www
 ```PowerShell
 Install-Package Serilog.Settings.AppSettings
 ```
-In your code, call ReadFrom.AppSettings():
+In your code, call `ReadFrom.AppSettings()`
 
 ```C#
 var logger = new LoggerConfiguration()
@@ -35,10 +35,12 @@ var logger = new LoggerConfiguration()
 In your application's App.config or Web.config file, specify the SQLite sink assembly and required **sqliteDbPath** under the `<appSettings>` node:
 
 ```XML
-<configuration>
-  <appSettings>
-    <add key="serilog:using:SQLite" value="Serilog.Sinks.SQLite" />
-    <add key="serilog:write-to:SQLite.sqliteDbPath" value="log.db" />
+<appSettings>
+    <add key="serilog:using:SQLite" value="Serilog.Sinks.SQLite"/>
+    <add key="serilog:write-to:SQLite.sqliteDbPath" value="Logs\log.db"/>
+    <add key="serilog:write-to:SQLite.tableName" value="Logs"/>
+    <add key="serilog:write-to:SQLite.storeTimestampInUtc" value="true"/>
+</appSettings>    
 ```
 
 ## Performance
