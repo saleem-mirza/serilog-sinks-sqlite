@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Data.Sqlite;
-using Newtonsoft.Json;
-using Serilog.Core;
-using Serilog.Debugging;
-using Serilog.Events;
-
 namespace Serilog.Sinks.SQLite
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Data;
+    using System.Threading;
+    using System.Threading.Tasks;
+
+    using Microsoft.Data.Sqlite;
+
+    using Newtonsoft.Json;
+
+    using Serilog.Core;
+    using Serilog.Debugging;
+    using Serilog.Events;
+
     internal class SQLiteSink : ILogEventSink, IDisposable
     {
         private readonly IFormatProvider _formatProvider;
