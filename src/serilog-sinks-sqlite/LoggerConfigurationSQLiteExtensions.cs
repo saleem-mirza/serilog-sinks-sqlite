@@ -18,8 +18,11 @@ using Serilog.Debugging;
 namespace Serilog
 {
     using System;
+    using System.Collections.Generic;
+    using System.Dynamic;
     using System.IO;
-
+    using System.Linq;
+    using Newtonsoft.Json;
     using Serilog.Configuration;
     using Serilog.Events;
     using Serilog.Sinks.SQLite;
@@ -86,6 +89,76 @@ namespace Serilog
                 SelfLog.WriteLine(ex.Message);
                 throw;
             }
+        }
+
+        public static string ToJson(this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
+        {
+            var expObject = new ExpandoObject() as IDictionary<string, object>;
+            foreach (var property in properties)
+            {
+                expObject.Add(property.Key, Simplify(property.Value)); 
+            }
+
+            return JsonConvert.SerializeObject(expObject);
+        }
+
+        private static object Simplify(LogEventPropertyValue data)
+        {
+            var value = data as ScalarValue;
+            if (value != null)
+            {
+                return value.Value;
+            }
+
+            var dictValue = data as IReadOnlyDictionary<string, LogEventPropertyValue>;
+            if (dictValue != null)
+            {
+                var expObject = new ExpandoObject() as IDictionary<string, object>;
+                foreach (var item in dictValue.Keys)
+                {
+                    expObject.Add(item, Simplify(dictValue[item]));
+                }
+                return expObject;
+            }
+
+            var seq = data as SequenceValue;
+            if (seq != null)
+            {
+                return seq.Elements.Select(Simplify).ToArray();
+            }
+
+            var str = data as StructureValue;
+            if (str != null)
+            {
+                try
+                {
+                    if (str.TypeTag != null)
+                    {
+                        if (str.TypeTag.StartsWith("DictionaryEntry") || str.TypeTag.StartsWith("KeyValuePair"))
+                        {
+                            var key = Simplify(str.Properties[0].Value);
+                            if (key == null)
+                            {
+                                return null;
+                            }
+
+                            var expObject = new ExpandoObject() as IDictionary<string, object>;
+                            expObject.Add(key.ToString(), Simplify(str.Properties[1].Value));
+                            return expObject;
+                        }
+                    }
+
+                    var props = str.Properties.ToDictionary(p => p.Name, p => Simplify(p.Value));
+                    return props;
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+
+            return null;
         }
     }
 }

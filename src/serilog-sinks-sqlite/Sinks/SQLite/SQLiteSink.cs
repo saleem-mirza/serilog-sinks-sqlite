@@ -18,9 +18,10 @@ namespace Serilog.Sinks.SQLite
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Data;
+    using System.Dynamic;
     using System.Threading;
     using System.Threading.Tasks;
-
+    using Formatting.Json;
     using Microsoft.Data.Sqlite;
 
     using Newtonsoft.Json;
@@ -35,6 +36,7 @@ namespace Serilog.Sinks.SQLite
         private readonly string _sqliteDbPath;
         private readonly bool _storeTimestampInUtc;
         private readonly string _tableName;
+        private readonly JsonFormatter _jsonFormater;
 
         private SqliteCommand _sqlCommand;
         private SqliteConnection _sqlConnection;
@@ -48,6 +50,7 @@ namespace Serilog.Sinks.SQLite
             _tableName = tableName;
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
+            _jsonFormater = new JsonFormatter(formatProvider: formatProvider);
             _messageQueue = new BlockingCollection<IList<LogEvent>>();
             _logEventBatch = new List<LogEvent>();
 
@@ -199,10 +202,12 @@ namespace Serilog.Sinks.SQLite
                     : logEvent.Timestamp;
                 _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                 _sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
-                _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
+                _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+
                 _sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
-                    ? JsonConvert.SerializeObject(logEvent.Properties)
-                    : string.Empty;
+                        ? logEvent.Properties.ToJson()
+                        : string.Empty;
+
 
                 await _sqlCommand.ExecuteNonQueryAsync();
             }
