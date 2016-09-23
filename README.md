@@ -20,7 +20,7 @@ logger.Information("This informational message will be written to SQLite databas
 
 ## XML <appSettings> configuration
 
-To use the rolling file sink with the [Serilog.Settings.AppSettings](https://www.nuget.org/packages/Serilog.Settings.AppSettings) package, first install that package if you haven't already done so:
+To use the SQLite sink with the [Serilog.Settings.AppSettings](https://www.nuget.org/packages/Serilog.Settings.AppSettings) package, first install that package if you haven't already done so:
 
 ```PowerShell
 Install-Package Serilog.Settings.AppSettings
@@ -44,6 +44,6 @@ In your application's App.config or Web.config file, specify the SQLite sink ass
 ```
 
 ## Performance
-Sink buffers log internally and flush to SQLite database in batches using dedicated thread.
+SQLite sink automatically buffers log internally and flush to SQLite database in batches on dedicated thread.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/nc8ql37klw2njd86/branch/master?svg=true)](https://ci.appveyor.com/project/SaleemMirza/serilog-sinks-sqlite/branch/master)
