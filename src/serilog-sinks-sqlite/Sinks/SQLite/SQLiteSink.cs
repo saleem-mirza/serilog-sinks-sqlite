@@ -33,7 +33,6 @@ namespace Serilog.Sinks.SQLite
         private readonly bool _storeTimestampInUtc;
         private readonly string _tableName;
 
-        private SqliteCommand _sqlCommand;
         private SqliteConnection _sqlConnection;
 
         public SQLiteSink(string sqlLiteDbPath,
@@ -50,11 +49,15 @@ namespace Serilog.Sinks.SQLite
 
             InitializeDatabase();
 
-            _workerThread = new Thread(Pump)
+            for (var i = 0; i < 1; i++)
             {
-                IsBackground = true
-            };
-            _workerThread.Start();
+                var workerThread = new Thread(Pump)
+                {
+                    IsBackground = true,
+                };
+                workerThread.Start();
+                _workerThreads.Add(workerThread);
+            }
 
             _timerTask = Task.Factory.StartNew(TimerPump);
         }
@@ -75,14 +78,10 @@ namespace Serilog.Sinks.SQLite
             _sqlConnection = GetSqLiteConnection();
 
             CreateSqlTable(_sqlConnection);
-            _sqlCommand = CreateSqlInsertCommand(_sqlConnection);
         }
 
         private SqliteConnection GetSqLiteConnection()
         {
-            if ((_sqlConnection != null) && (_sqlConnection.State != ConnectionState.Closed))
-                return _sqlConnection;
-
             var sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
             sqlConnection.Open();
             return sqlConnection;
@@ -119,17 +118,16 @@ namespace Serilog.Sinks.SQLite
             sqlCommand.Parameters.Add(new SqliteParameter("@renderedMessage", DbType.String));
             sqlCommand.Parameters.Add(new SqliteParameter("@properties", DbType.String));
 
-            sqlCommand.Prepare();
             return sqlCommand;
         }
 
         #region Parallel and Buffered implementation
 
-        private const int BatchSize = 250;
+        private const int BatchSize = 500;
         private bool _canStop;
 
         private readonly Task _timerTask;
-        private readonly Thread _workerThread;
+        private readonly List<Thread> _workerThreads = new List<Thread>();
         private readonly List<LogEvent> _logEventBatch;
         private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
         private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
@@ -161,10 +159,10 @@ namespace Serilog.Sinks.SQLite
                 while (true)
                 {
                     var logEvents = _messageQueue.Take(_cancellationToken.Token);
-                    WriteLogEvent(logEvents).Wait();
+                    WriteLogEvent(logEvents);
                 }
             }
-            catch (OperationCanceledException e)
+            catch (OperationCanceledException)
             {
                 _canStop = true;
                 _timerResetEvent.Set();
@@ -172,8 +170,7 @@ namespace Serilog.Sinks.SQLite
 
                 IList<LogEvent> eventBatch;
                 while (_messageQueue.TryTake(out eventBatch))
-                    WriteLogEvent(eventBatch).Wait();
-                SelfLog.WriteLine(e.Message);
+                    WriteLogEvent(eventBatch);
             }
             catch (Exception e)
             {
@@ -181,49 +178,44 @@ namespace Serilog.Sinks.SQLite
             }
         }
 
-        private async Task WriteLogEvent(LogEvent logEvent)
-        {
-            try
-            {
-                _sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                    ? logEvent.Timestamp.ToUniversalTime()
-                    : logEvent.Timestamp;
-                _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                _sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
-                _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
-
-                _sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
-                    ? logEvent.Properties.Json()
-                    : string.Empty;
-
-
-                await _sqlCommand.ExecuteNonQueryAsync();
-            }
-            catch (Exception e)
-            {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
-
-        private async Task WriteLogEvent(ICollection<LogEvent> logEventsBatch)
+        private void WriteLogEvent(ICollection<LogEvent> logEventsBatch)
         {
             if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
                 return;
-
-            using (var tr = _sqlConnection.BeginTransaction())
+            try
             {
-                try
-                {
-                    _sqlCommand.Transaction = tr;
-                    foreach (var logEvent in logEventsBatch)
-                        await WriteLogEvent(logEvent);
 
-                    tr.Commit();
-                }
-                finally
+                using (var sqlConnection = GetSqLiteConnection())
                 {
-                    _sqlCommand.Transaction = null;
+                    using (var tr = sqlConnection.BeginTransaction())
+                    {
+                        var sqlCommand = CreateSqlInsertCommand(sqlConnection);
+                        sqlCommand.Transaction = tr;
+
+                        foreach (var logEvent in logEventsBatch)
+                        {
+                            sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
+                                ? logEvent.Timestamp.ToUniversalTime()
+                                : logEvent.Timestamp;
+                            sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
+                            sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
+                            sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+
+                            sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
+                                ? logEvent.Properties.Json()
+                                : string.Empty;
+
+                            sqlCommand.ExecuteNonQuery();
+                        }
+                        tr.Commit();
+                    }
+
+                    sqlConnection.Close();
                 }
+            }
+            catch (Exception e)
+            {
+                SelfLog.WriteLine(e.Message);
             }
         }
 
@@ -240,10 +232,10 @@ namespace Serilog.Sinks.SQLite
                 if (disposing)
                 {
                     _cancellationToken.Cancel();
-                    _workerThread.Join();
-
-                    if ((_sqlConnection != null) && (_sqlConnection.State != ConnectionState.Closed))
-                        _sqlConnection.Close();
+                    foreach (var workerThread in _workerThreads)
+                    {
+                        workerThread.Join();
+                    }
                 }
 
                 _disposedValue = true;
