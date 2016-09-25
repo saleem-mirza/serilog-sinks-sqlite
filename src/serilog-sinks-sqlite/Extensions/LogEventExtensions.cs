@@ -11,27 +11,27 @@ namespace Serilog.Extensions
     {
         public static string Json(this LogEvent logEvent, bool storeTimestampInUtc = false)
         {
-            return JsonConvert.SerializeObject(ConvertToObject(logEvent, storeTimestampInUtc));
+            return JsonConvert.SerializeObject(ConvertToDictionary(logEvent, storeTimestampInUtc));
         }
 
-        public static dynamic Object(this LogEvent logEvent, bool storeTimestampInUtc = false)
+        public static IDictionary<string, object> Dictionary(this LogEvent logEvent, bool storeTimestampInUtc = false)
         {
-            return ConvertToObject(logEvent, storeTimestampInUtc);
+            return ConvertToDictionary(logEvent, storeTimestampInUtc);
         }
 
         public static string Json(this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
         {
-            return JsonConvert.SerializeObject(ConvertToObject(properties));
+            return JsonConvert.SerializeObject(ConvertToDictionary(properties));
         }
 
-        public static dynamic Object(this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
+        public static IDictionary<string, object> Dictionary(this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
         {
-            return ConvertToObject(properties);
+            return ConvertToDictionary(properties);
         }
 
         #region Private implementation
 
-        private static dynamic ConvertToObject(IReadOnlyDictionary<string, LogEventPropertyValue> properties)
+        private static dynamic ConvertToDictionary(IReadOnlyDictionary<string, LogEventPropertyValue> properties)
         {
             var expObject = new ExpandoObject() as IDictionary<string, object>;
             foreach (var property in properties)
@@ -41,19 +41,18 @@ namespace Serilog.Extensions
             return expObject;
         }
 
-        private static dynamic ConvertToObject(LogEvent logEvent, bool storeTimestampInUtc)
+        private static dynamic ConvertToDictionary(LogEvent logEvent, bool storeTimestampInUtc)
         {
-            var eventObject = new
-            {
-                Timestamp =
-                storeTimestampInUtc
+            var eventObject = new ExpandoObject() as IDictionary<string, object>;
+            eventObject.Add("Timestamp", storeTimestampInUtc
                     ? logEvent.Timestamp.ToUniversalTime().ToString("o")
-                    : logEvent.Timestamp.ToString("o"),
-                Level = logEvent.Level.ToString(),
-                MessageTemplate = logEvent.MessageTemplate.ToString(),
-                logEvent.Exception,
-                Properties = logEvent.Properties.Object()
-            };
+                    : logEvent.Timestamp.ToString("o"));
+
+            eventObject.Add("Level", logEvent.Level.ToString());
+            eventObject.Add("MessageTemplate", logEvent.MessageTemplate.ToString());
+            eventObject.Add("Exception", logEvent.Exception);
+            eventObject.Add("Properties", logEvent.Properties.Dictionary());
+
             return eventObject;
         }
 
