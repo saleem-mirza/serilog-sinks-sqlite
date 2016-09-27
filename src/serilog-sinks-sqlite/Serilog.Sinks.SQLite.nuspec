@@ -6,7 +6,7 @@
     <authors>Saleem Mirza</authors>
     <description>Lightweight Serilog event sink that writes to SQLite database.</description>
     <language>en-US</language>
-    <projectUrl>http://serilog.net</projectUrl>
+    <projectUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite/wiki</projectUrl>
     <licenseUrl>http://www.apache.org/licenses/LICENSE-2.0</licenseUrl>
     <iconUrl>http://serilog.net/images/serilog-sink-nuget.png</iconUrl>
     <tags>serilog logging sqlite</tags>
