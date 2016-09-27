@@ -1,5 +1,4 @@
 ﻿using System;
-using System.CodeDom;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -12,13 +11,13 @@ namespace Serilog.Sinks.Batch
     internal abstract class BatchProvider : IDisposable
     {
         private readonly uint _batchSize;
-        private readonly Task _timerTask;
-        private readonly List<Thread> _workerThreads;
+        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
         private readonly List<LogEvent> _logEventBatch;
         private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
         private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
         private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
-        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+        private readonly Task _timerTask;
+        private readonly List<Thread> _workerThreads;
 
         private bool _canStop;
 

@@ -24,7 +24,8 @@ namespace Serilog.Extensions
             return JsonConvert.SerializeObject(ConvertToDictionary(properties));
         }
 
-        public static IDictionary<string, object> Dictionary(this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
+        public static IDictionary<string, object> Dictionary(
+            this IReadOnlyDictionary<string, LogEventPropertyValue> properties)
         {
             return ConvertToDictionary(properties);
         }
@@ -35,9 +36,7 @@ namespace Serilog.Extensions
         {
             var expObject = new ExpandoObject() as IDictionary<string, object>;
             foreach (var property in properties)
-            {
                 expObject.Add(property.Key, Simplify(property.Value));
-            }
             return expObject;
         }
 
@@ -45,8 +44,8 @@ namespace Serilog.Extensions
         {
             var eventObject = new ExpandoObject() as IDictionary<string, object>;
             eventObject.Add("Timestamp", storeTimestampInUtc
-                    ? logEvent.Timestamp.ToUniversalTime().ToString("o")
-                    : logEvent.Timestamp.ToString("o"));
+                ? logEvent.Timestamp.ToUniversalTime().ToString("o")
+                : logEvent.Timestamp.ToString("o"));
 
             eventObject.Add("Level", logEvent.Level.ToString());
             eventObject.Add("MessageTemplate", logEvent.MessageTemplate.ToString());
