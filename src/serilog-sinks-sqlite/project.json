@@ -1,0 +1,33 @@
+{
+    "title": "Serilog.Sinks.SQLite",
+    "version": "3.5.3-*",
+    "description": "Serilog event sink that writes to SQLite database",
+    "authors": [
+        "Saleem Mirza"
+    ],
+    "packOptions": {
+        "tags": [
+            "serilog",
+            "logging",
+            "sqlite"
+        ],
+        "projectUrl": "http://serilog.net",
+        "licenseUrl": "http://www.apache.org/licenses/LICENSE-2.0",
+        "iconUrl": "http://serilog.net/images/serilog-sink-nuget.png"
+    },
+    "buildOptions": {
+        "debugType": "portable",
+        "outputName": "Serilog.Sinks.SQLite",
+        "optimize": true
+    },
+    "dependencies": {
+	  "Microsoft.Data.Sqlite": "1.0.0", 
+      "Newtonsoft.Json": "9.0.1", 
+      "Serilog": "2.2.1",
+      "SQLite": "3.12.3",
+      "SQLite.Native": "3.12.3"
+    },
+    "frameworks": {
+        "net452": {}
+    }
+}
