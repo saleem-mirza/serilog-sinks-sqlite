@@ -13,27 +13,24 @@
 // limitations under the License.
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
-using Newtonsoft.Json;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
+using Serilog.Extensions;
+using Serilog.Sinks.Batch;
 
 namespace Serilog.Sinks.SQLite
 {
-    internal class SQLiteSink : ILogEventSink, IDisposable
+    internal class SQLiteSink : BatchProvider, ILogEventSink
     {
         private readonly IFormatProvider _formatProvider;
         private readonly string _sqliteDbPath;
         private readonly bool _storeTimestampInUtc;
         private readonly string _tableName;
 
-        private SqliteCommand _sqlCommand;
         private SqliteConnection _sqlConnection;
 
         public SQLiteSink(string sqlLiteDbPath,
@@ -45,29 +42,15 @@ namespace Serilog.Sinks.SQLite
             _tableName = tableName;
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
-            _messageQueue = new BlockingCollection<IList<LogEvent>>();
-            _logEventBatch = new List<LogEvent>();
 
             InitializeDatabase();
-
-            _workerThread = new Thread(Pump)
-            {
-                IsBackground = true
-            };
-            _workerThread.Start();
-
-            _timerTask = Task.Factory.StartNew(TimerPump);
         }
 
         #region ILogEvent implementation
 
         public void Emit(LogEvent logEvent)
         {
-            _logEventBatch.Add(logEvent);
-            if (_logEventBatch.Count >= BatchSize)
-            {
-                FlushLogEventBatch();
-            }
+            PushEvent(logEvent);
         }
 
         #endregion
@@ -77,16 +60,10 @@ namespace Serilog.Sinks.SQLite
             _sqlConnection = GetSqLiteConnection();
 
             CreateSqlTable(_sqlConnection);
-            _sqlCommand = CreateSqlInsertCommand(_sqlConnection);
         }
 
         private SqliteConnection GetSqLiteConnection()
         {
-            if (_sqlConnection != null && _sqlConnection.State != ConnectionState.Closed)
-            {
-                return _sqlConnection;
-            }
-
             var sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
             sqlConnection.Open();
             return sqlConnection;
@@ -123,152 +100,47 @@ namespace Serilog.Sinks.SQLite
             sqlCommand.Parameters.Add(new SqliteParameter("@renderedMessage", DbType.String));
             sqlCommand.Parameters.Add(new SqliteParameter("@properties", DbType.String));
 
-            sqlCommand.Prepare();
             return sqlCommand;
         }
 
-        #region Parallel and Buffered implementation
-
-        private const int BatchSize = 250;
-        private bool _canStop;
-
-        private readonly Task _timerTask;
-        private readonly Thread _workerThread;
-        private readonly List<LogEvent> _logEventBatch;
-        private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
-        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
-        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
-        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
-
-        private void TimerPump()
+        protected override void WriteLogEvent(ICollection<LogEvent> logEventsBatch)
         {
-            while (!_canStop)
-            {
-                _timerResetEvent.WaitOne(_thresholdTimeSpan);
-                FlushLogEventBatch();
-            }
-        }
-
-        private void FlushLogEventBatch()
-        {
-            lock (this)
-            {
-                _messageQueue.Add(_logEventBatch.ToArray());
-                _logEventBatch.Clear();
-            }
-        }
-
-        private void Pump()
-        {
-            try
-            {
-                while (true)
-                {
-                    var logEvents = _messageQueue.Take(_cancellationToken.Token);
-                    WriteLogEvent(logEvents).Wait();
-                }
-            }
-            catch (OperationCanceledException e)
-            {
-                _canStop = true;
-                _timerResetEvent.Set();
-                _timerTask.Wait();
-
-                IList<LogEvent> eventBatch;
-                while (_messageQueue.TryTake(out eventBatch))
-                {
-                    WriteLogEvent(eventBatch).Wait();
-                }
-                SelfLog.WriteLine(e.Message);
-            }
-            catch (Exception e)
-            {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
-
-        private async Task WriteLogEvent(LogEvent logEvent)
-        {
-            try
-            {
-                _sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                    ? logEvent.Timestamp.ToUniversalTime()
-                    : logEvent.Timestamp;
-                _sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                _sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
-                _sqlCommand.Parameters["@renderedMessage"].Value = logEvent.RenderMessage(_formatProvider);
-                _sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
-                    ? JsonConvert.SerializeObject(logEvent.Properties)
-                    : string.Empty;
-
-                await _sqlCommand.ExecuteNonQueryAsync();
-            }
-            catch (Exception e)
-            {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
-
-        private async Task WriteLogEvent(ICollection<LogEvent> logEventsBatch)
-        {
-            if (logEventsBatch == null || logEventsBatch.Count == 0)
-            {
+            if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
                 return;
-            }
-
-            using (var tr = _sqlConnection.BeginTransaction())
+            try
             {
-                try
+                using (var sqlConnection = GetSqLiteConnection())
                 {
-                    _sqlCommand.Transaction = tr;
-                    foreach (var logEvent in logEventsBatch)
+                    using (var tr = sqlConnection.BeginTransaction())
                     {
-                        await WriteLogEvent(logEvent);
+                        var sqlCommand = CreateSqlInsertCommand(sqlConnection);
+                        sqlCommand.Transaction = tr;
+
+                        foreach (var logEvent in logEventsBatch)
+                        {
+                            sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
+                                ? logEvent.Timestamp.ToUniversalTime()
+                                : logEvent.Timestamp;
+                            sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
+                            sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
+                            sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+
+                            sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
+                                ? logEvent.Properties.Json()
+                                : string.Empty;
+
+                            sqlCommand.ExecuteNonQuery();
+                        }
+                        tr.Commit();
                     }
 
-                    tr.Commit();
-                }
-                finally
-                {
-                    _sqlCommand.Transaction = null;
+                    sqlConnection.Close();
                 }
             }
-        }
-
-        #endregion
-
-        #region IDisposable Support
-
-        private bool _disposedValue; // To detect redundant calls
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposedValue)
+            catch (Exception e)
             {
-                if (disposing)
-                {
-                    _cancellationToken.Cancel();
-                    _workerThread.Join();
-
-                    if (_sqlConnection != null && _sqlConnection.State != ConnectionState.Closed)
-                    {
-                        _sqlConnection.Close();
-                    }
-                }
-
-                _disposedValue = true;
+                SelfLog.WriteLine(e.Message);
             }
         }
-
-        // This code added to correctly implement the disposable pattern.
-        public void Dispose()
-        {
-            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
-            Dispose(true);
-            // TODO: uncomment the following line if the finalizer is overridden above.
-            // GC.SuppressFinalize(this);
-        }
-
-        #endregion
     }
 }

@@ -99,8 +99,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Extensions\LogEventExtensions.cs" />
     <Compile Include="LoggerConfigurationSQLiteExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Sinks\Batch\BatchProvider.cs" />
     <Compile Include="Sinks\SQLite\SQLiteSink.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using System;
-using System.IO;
-using Serilog.Configuration;
-using Serilog.Events;
-using Serilog.Sinks.SQLite;
+using Serilog.Debugging;
 
 namespace Serilog
 {
+    using System;
+    using System.IO;
+    using Serilog.Configuration;
+    using Serilog.Events;
+    using Serilog.Sinks.SQLite;
+
     /// <summary>
     ///     Adds the WriteTo.SQLite() extension method to <see cref="LoggerConfiguration" />.
     /// </summary>
@@ -53,16 +55,35 @@ namespace Serilog
                 throw new ArgumentNullException(nameof(sqliteDbPath));
             }
 
-            var sqliteDbFile = new FileInfo(sqliteDbPath);
-            sqliteDbFile.Directory?.Create();
+            Uri sqliteDbPathUri;
+            if (!Uri.TryCreate(sqliteDbPath, UriKind.RelativeOrAbsolute, out sqliteDbPathUri))
+            {
+                throw new ArgumentException($"Invalid path {nameof(sqliteDbPath)}");
+            }
 
-            return loggerConfiguration.Sink(
-                new SQLiteSink(
-                    sqliteDbFile.FullName,
-                    tableName,
-                    formatProvider,
-                    storeTimestampInUtc),
-                restrictedToMinimumLevel);
+            if (!sqliteDbPathUri.IsAbsoluteUri)
+            {
+                sqliteDbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, sqliteDbPath);
+            }
+
+            try
+            {
+                var sqliteDbFile = new FileInfo(sqliteDbPath);
+                sqliteDbFile.Directory?.Create();
+
+                return loggerConfiguration.Sink(
+                    new SQLiteSink(
+                        sqliteDbFile.FullName,
+                        tableName,
+                        formatProvider,
+                        storeTimestampInUtc),
+                    restrictedToMinimumLevel);
+            }
+            catch (Exception ex)
+            {
+                SelfLog.WriteLine(ex.Message);
+                throw;
+            }
         }
     }
 }
