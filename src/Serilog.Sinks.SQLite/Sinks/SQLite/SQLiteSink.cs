@@ -64,7 +64,12 @@ namespace Serilog.Sinks.SQLite
 
         private SqliteConnection GetSqLiteConnection()
         {
-            var sqlConnection = new SqliteConnection($"Data Source={_sqliteDbPath}");
+            var connStrBuilder = new SqliteConnectionStringBuilder
+            {
+                DataSource = _sqliteDbPath
+            };
+
+            var sqlConnection = new SqliteConnection(connStrBuilder.ConnectionString);
             sqlConnection.Open();
             return sqlConnection;
         }
