@@ -19,10 +19,10 @@ using Microsoft.Data.Sqlite;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
-using Serilog.Extensions;
 using Serilog.Sinks.Batch;
 using System.Diagnostics;
 using System.Linq;
+using Serilog.Extensions;
 
 namespace Serilog.Sinks.SQLite
 {
@@ -67,7 +67,7 @@ namespace Serilog.Sinks.SQLite
 
         private void InitializeDatabase()
         {
-            using(var conn = GetSqLiteConnection())
+            using (var conn = GetSqLiteConnection())
                 CreateSqlTable(conn);
         }
 
