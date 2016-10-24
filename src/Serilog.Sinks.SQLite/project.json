@@ -1,6 +1,6 @@
 {
     "title": "Serilog.Sinks.SQLite",
-    "version": "3.6.5-*",
+    "version": "3.6.8-*",
     "description": "Serilog event sink that writes to SQLite database",
     "authors": [
         "Saleem Mirza"

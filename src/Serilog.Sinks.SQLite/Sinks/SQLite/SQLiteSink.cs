@@ -22,7 +22,7 @@ using Serilog.Events;
 using Serilog.Sinks.Batch;
 using System.Diagnostics;
 using System.Linq;
-using Serilog.Extensions;
+using Serilog.Sinks.Extensions;
 
 namespace Serilog.Sinks.SQLite
 {

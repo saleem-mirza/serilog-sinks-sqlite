@@ -5,7 +5,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Serilog.Events;
 
-namespace Serilog.Extensions
+namespace Serilog.Sinks.Extensions
 {
     public static class LogEventExtensions
     {
