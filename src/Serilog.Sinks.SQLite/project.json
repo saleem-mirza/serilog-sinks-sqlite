@@ -1,6 +1,6 @@
 {
     "title": "Serilog.Sinks.SQLite",
-    "version": "3.7.4-*",
+    "version": "3.8.0-*",
     "description": "Serilog event sink that writes to SQLite database",
     "authors": [
         "Saleem Mirza"
@@ -21,13 +21,17 @@
         "optimize": true
     },
     "dependencies": {
-	  "Microsoft.Data.Sqlite": "1.0.0", 
+	  "Microsoft.Data.Sqlite": "1.1.0", 
       "Newtonsoft.Json": "9.0.1", 
       "Serilog": "2.2.1",
-      "SQLite": "3.12.3",
+      "SQLite": "3.13.0",
       "SQLite.Native": "3.12.3"
     },
-    "frameworks": {
-        "net452": {}
-    }
+  "frameworks": {
+    "net452": {},
+    "net451": {},
+    "net460": {},
+    "net461": {},
+    "net462": {}
+  }
 }

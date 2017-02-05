@@ -22,7 +22,123 @@ using Serilog.Events;
 
 namespace Serilog.Sinks.Batch
 {
-#if NET452
+#if NETSTANDARD1_6
+
+    internal abstract class BatchProvider : IDisposable
+    {
+        private readonly uint _batchSize;
+        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
+        private readonly List<LogEvent> _logEventBatch;
+        private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
+        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
+        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
+        private readonly Task _timerTask;
+        private readonly Task _workerTask;
+        private readonly List<Task> _workerTasks = new List<Task>();
+
+        private bool _canStop;
+
+        protected BatchProvider(uint batchSize = 100, int nThreads = 1)
+        {
+            _batchSize = batchSize;
+            _logEventBatch = new List<LogEvent>();
+            _messageQueue = new BlockingCollection<IList<LogEvent>>();
+
+            _workerTask = Task.Factory.StartNew(Pump);
+            _timerTask = Task.Factory.StartNew(TimerPump);
+        }
+
+        private void Pump()
+        {
+            try
+            {
+                while (true)
+                {
+                    var logEvents = _messageQueue.Take(_cancellationToken.Token);
+                    var task = Task.Factory.StartNew((x) =>
+                    {
+                        WriteLogEvent(x as IList<LogEvent>);
+                    }, logEvents);
+
+                    _workerTasks.Add(task);
+
+                    if (_workerTasks.Count <= 32) continue;
+                    Task.WaitAll(_workerTasks.ToArray(), _cancellationToken.Token);
+                    _workerTasks.Clear();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _canStop = true;
+                _timerResetEvent.Set();
+                _timerTask.Wait();
+
+                IList<LogEvent> eventBatch;
+                while (_messageQueue.TryTake(out eventBatch))
+                    WriteLogEvent(eventBatch);
+            }
+            catch (Exception e)
+            {
+                SelfLog.WriteLine(e.Message);
+            }
+        }
+
+        private void TimerPump()
+        {
+            while (!_canStop)
+            {
+                _timerResetEvent.WaitOne(_thresholdTimeSpan);
+                FlushLogEventBatch();
+            }
+        }
+
+        private void FlushLogEventBatch()
+        {
+            lock (this)
+            {
+                _messageQueue.Add(_logEventBatch.ToArray());
+                _logEventBatch.Clear();
+            }
+        }
+
+        protected void PushEvent(LogEvent logEvent)
+        {
+            _logEventBatch.Add(logEvent);
+            if (_logEventBatch.Count >= _batchSize)
+                FlushLogEventBatch();
+        }
+
+        protected abstract void WriteLogEvent(ICollection<LogEvent> logEventsBatch);
+
+    #region IDisposable Support
+
+        private bool _disposedValue; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    SelfLog.WriteLine("Halting sink...");
+                    _cancellationToken.Cancel();
+                    Task.WaitAll(_workerTasks.ToArray());
+                    SelfLog.WriteLine("Sink halted successfully.");
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+
+    #endregion
+    }
+
+#else
 
     internal abstract class BatchProvider : IDisposable
     {
@@ -138,122 +254,6 @@ namespace Serilog.Sinks.Batch
         }
 
         #endregion
-    }
-#elif NETSTANDARD1_6
-
-
-    internal abstract class BatchProvider : IDisposable
-    {
-        private readonly uint _batchSize;
-        private readonly CancellationTokenSource _cancellationToken = new CancellationTokenSource();
-        private readonly List<LogEvent> _logEventBatch;
-        private readonly BlockingCollection<IList<LogEvent>> _messageQueue;
-        private readonly TimeSpan _thresholdTimeSpan = TimeSpan.FromSeconds(10);
-        private readonly AutoResetEvent _timerResetEvent = new AutoResetEvent(false);
-        private readonly Task _timerTask;
-        private readonly Task _workerTask;
-        private readonly List<Task> _workerTasks = new List<Task>();
-        
-        private bool _canStop;
-
-        protected BatchProvider(uint batchSize = 100, int nThreads = 1)
-        {
-            _batchSize = batchSize;
-            _logEventBatch = new List<LogEvent>();
-            _messageQueue = new BlockingCollection<IList<LogEvent>>();
-            
-            _workerTask = Task.Factory.StartNew(Pump);
-            _timerTask = Task.Factory.StartNew(TimerPump);
-        }
-
-        private void Pump()
-        {
-            try
-            {
-                while (true)
-                {
-                    var logEvents = _messageQueue.Take(_cancellationToken.Token);
-                    var task = Task.Factory.StartNew((x) =>
-                    {
-                        WriteLogEvent(x as IList<LogEvent>);
-                    }, logEvents);
-
-                    _workerTasks.Add(task);
-
-                    if (_workerTasks.Count <= 32) continue;
-                    Task.WaitAll(_workerTasks.ToArray(), _cancellationToken.Token);
-                    _workerTasks.Clear();
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                _canStop = true;
-                _timerResetEvent.Set();
-                _timerTask.Wait();
-
-                IList<LogEvent> eventBatch;
-                while (_messageQueue.TryTake(out eventBatch))
-                    WriteLogEvent(eventBatch);
-            }
-            catch (Exception e)
-            {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
-
-        private void TimerPump()
-        {
-            while (!_canStop)
-            {
-                _timerResetEvent.WaitOne(_thresholdTimeSpan);
-                FlushLogEventBatch();
-            }
-        }
-
-        private void FlushLogEventBatch()
-        {
-            lock (this)
-            {
-                _messageQueue.Add(_logEventBatch.ToArray());
-                _logEventBatch.Clear();
-            }
-        }
-
-        protected void PushEvent(LogEvent logEvent)
-        {
-            _logEventBatch.Add(logEvent);
-            if (_logEventBatch.Count >= _batchSize)
-                FlushLogEventBatch();
-        }
-
-        protected abstract void WriteLogEvent(ICollection<LogEvent> logEventsBatch);
-
-    #region IDisposable Support
-
-        private bool _disposedValue; // To detect redundant calls
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposedValue)
-            {
-                if (disposing)
-                {
-                    SelfLog.WriteLine("Halting sink...");
-                    _cancellationToken.Cancel();
-                    Task.WaitAll(_workerTasks.ToArray());
-                    SelfLog.WriteLine("Sink halted successfully.");
-                }
-
-                _disposedValue = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-
-    #endregion
     }
 #endif
 }
