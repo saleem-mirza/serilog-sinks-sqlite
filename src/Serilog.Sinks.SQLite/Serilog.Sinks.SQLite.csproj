@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyTitle>Serilog.Sinks.SQLite</AssemblyTitle>
+    <Authors>Saleem Mirza</Authors>
+    <AssemblyName>Serilog.Sinks.SQLite</AssemblyName>
+    <Description>Serilog event sink that writes to SQLite database</Description>	
+    <PackageId>Serilog.Sinks.SQLite</PackageId>
+    <PackageTags>serilog;logging;SQLite</PackageTags>
+    <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
+    <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
+    <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+    <Copyright>Copyright © Zethian Inc. 2013-2017</Copyright>
+    <AssemblyVersion>3.8.0.0</AssemblyVersion>	
+	<Version>3.8.0</Version>
+    <SignAssembly>True</SignAssembly>
+    <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
+    <TargetFrameworks>netstandard1.6;net451</TargetFrameworks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(VersionSuffix)'!='' ">
+    <Version>$(Version)-$(VersionSuffix)</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="1.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
+    <PackageReference Include="Serilog" Version="2.4.0" />
+    <PackageReference Include="SQLite" Version="3.13.0" />
+    <PackageReference Include="SQLite.Native" Version="3.12.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net451' ">
+    <Reference Include="System" />
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
+
+</Project>

@@ -49,11 +49,13 @@ namespace Serilog
         {
             if (loggerConfiguration == null)
             {
+                SelfLog.WriteLine("Logger configuration is null");
                 throw new ArgumentNullException(nameof(loggerConfiguration));
             }
 
             if (string.IsNullOrEmpty(sqliteDbPath))
             {
+                SelfLog.WriteLine("Invalid sqliteDbPath");
                 throw new ArgumentNullException(nameof(sqliteDbPath));
             }
 
@@ -65,7 +67,8 @@ namespace Serilog
 
             if (!sqliteDbPathUri.IsAbsoluteUri)
             {
-                sqliteDbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, sqliteDbPath);
+                var basePath = System.Reflection.Assembly.GetEntryAssembly().Location;
+                sqliteDbPath = Path.Combine(Path.GetDirectoryName(basePath), sqliteDbPath);
             }
 
             try
