@@ -11,12 +11,12 @@
     <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
     <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
     <Copyright>Copyright © Zethian Inc. 2013-2017</Copyright>
-    <AssemblyVersion>3.8.3.0</AssemblyVersion>	
-	<Version>3.8.3</Version>
+    <AssemblyVersion>3.8.5.0</AssemblyVersion>	
+	<Version>3.8.5</Version>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
-    <TargetFrameworks>netstandard1.6;net451</TargetFrameworks>
-    <FileVersion>3.8.3.0</FileVersion>
+    <TargetFrameworks>netcoreapp1.0;net451</TargetFrameworks>
+    <FileVersion>3.8.5.0</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(VersionSuffix)'!='' ">
@@ -24,7 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="1.1.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="1.1.1" />
     <PackageReference Include="Newtonsoft.Json" Version="10.0.2" />
     <PackageReference Include="Serilog" Version="2.4.0" />
     <PackageReference Include="SQLite" Version="3.13.0" />
