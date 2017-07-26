@@ -149,7 +149,7 @@ namespace Serilog.Sinks.Batch
             {
                 if (disposing)
                 {
-                    FluchAndCloseEventHandlers();
+                    FlushAndCloseEventHandlers();
 
                     SelfLog.WriteLine("Sink halted successfully.");
                 }
@@ -158,7 +158,7 @@ namespace Serilog.Sinks.Batch
             }
         }
 
-        private void FluchAndCloseEventHandlers()
+        private void FlushAndCloseEventHandlers()
         {
             try
             {
