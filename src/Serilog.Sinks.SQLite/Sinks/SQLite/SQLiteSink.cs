@@ -15,7 +15,6 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using Microsoft.Data.Sqlite;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
@@ -23,6 +22,7 @@ using Serilog.Sinks.Batch;
 using System.Diagnostics;
 using System.Linq;
 using Serilog.Sinks.Extensions;
+using System.Data.SQLite;
 
 namespace Serilog.Sinks.SQLite
 {
@@ -49,12 +49,12 @@ namespace Serilog.Sinks.SQLite
             if (retentionPeriod.HasValue)
                 // impose a min retention period of 1 minute
                 _retentionPeriod = new[] { retentionPeriod.Value, TimeSpan.FromMinutes(1) }.Max();
-
+           
             InitializeDatabase();
         }
 
         private static string CreateConnectionString(string dbPath) =>
-            new SqliteConnectionStringBuilder { DataSource = dbPath }.ConnectionString;
+            new SQLiteConnectionStringBuilder { DataSource = dbPath }.ConnectionString;
 
         #region ILogEvent implementation
 
@@ -71,14 +71,14 @@ namespace Serilog.Sinks.SQLite
                 CreateSqlTable(conn);
         }
 
-        private SqliteConnection GetSqLiteConnection()
+        private SQLiteConnection GetSqLiteConnection()
         {
-            var sqlConnection = new SqliteConnection(_connString);
+            var sqlConnection = new SQLiteConnection(_connString);
             sqlConnection.Open();
             return sqlConnection;
         }
 
-        private void CreateSqlTable(SqliteConnection sqlConnection)
+        private void CreateSqlTable(SQLiteConnection sqlConnection)
         {
             var colDefs = "id INTEGER PRIMARY KEY AUTOINCREMENT,";
             colDefs += "Timestamp TEXT,";
@@ -89,11 +89,11 @@ namespace Serilog.Sinks.SQLite
 
             var sqlCreateText = $"CREATE TABLE IF NOT EXISTS {_tableName} ({colDefs})";
 
-            var sqlCommand = new SqliteCommand(sqlCreateText, sqlConnection);
+            var sqlCommand = new SQLiteCommand(sqlCreateText, sqlConnection);
             sqlCommand.ExecuteNonQuery();
         }
 
-        private SqliteCommand CreateSqlInsertCommand(SqliteConnection connection)
+        private SQLiteCommand CreateSqlInsertCommand(SQLiteConnection connection)
         {
             var sqlInsertText = "INSERT INTO {0} (Timestamp, Level, Exception, RenderedMessage, Properties)";
             sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
@@ -103,11 +103,11 @@ namespace Serilog.Sinks.SQLite
             sqlCommand.CommandText = sqlInsertText;
             sqlCommand.CommandType = CommandType.Text;
 
-            sqlCommand.Parameters.Add(new SqliteParameter("@timeStamp", DbType.DateTime2));
-            sqlCommand.Parameters.Add(new SqliteParameter("@level", DbType.String));
-            sqlCommand.Parameters.Add(new SqliteParameter("@exception", DbType.String));
-            sqlCommand.Parameters.Add(new SqliteParameter("@renderedMessage", DbType.String));
-            sqlCommand.Parameters.Add(new SqliteParameter("@properties", DbType.String));
+            sqlCommand.Parameters.Add(new SQLiteParameter("@timeStamp", DbType.DateTime2));
+            sqlCommand.Parameters.Add(new SQLiteParameter("@level", DbType.String));
+            sqlCommand.Parameters.Add(new SQLiteParameter("@exception", DbType.String));
+            sqlCommand.Parameters.Add(new SQLiteParameter("@renderedMessage", DbType.String));
+            sqlCommand.Parameters.Add(new SQLiteParameter("@properties", DbType.String));
 
             return sqlCommand;
         }
@@ -156,7 +156,7 @@ namespace Serilog.Sinks.SQLite
             }
         }
 
-        private void ApplyRetentionPolicy(SqliteConnection sqlConnection)
+        private void ApplyRetentionPolicy(SQLiteConnection sqlConnection)
         {
             if (!_retentionPeriod.HasValue)
                 // there is no retention policy
@@ -180,11 +180,11 @@ namespace Serilog.Sinks.SQLite
             _retentionWatch.Restart();
         }
 
-        private SqliteCommand CreateSqlDeleteCommand(SqliteConnection sqlConnection, DateTimeOffset epoch)
+        private SQLiteCommand CreateSqlDeleteCommand(SQLiteConnection sqlConnection, DateTimeOffset epoch)
         {
             var cmd = sqlConnection.CreateCommand();
             cmd.CommandText = $"DELETE FROM {_tableName} WHERE Timestamp < @epoch";
-            cmd.Parameters.Add(new SqliteParameter("@epoch", DbType.DateTime2)
+            cmd.Parameters.Add(new SQLiteParameter("@epoch", DbType.DateTime2)
             {
                 Value = _storeTimestampInUtc ? epoch.ToUniversalTime() : epoch
             });
