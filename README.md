@@ -47,3 +47,7 @@ In your application's App.config or Web.config file, specify the SQLite sink ass
 SQLite sink automatically buffers log internally and flush to SQLite database in batches on dedicated thread.
 
 [![Build status](https://ci.appveyor.com/api/projects/status/sqjvxji4w84iyqa0?svg=true)](https://ci.appveyor.com/project/SaleemMirza/serilog-sinks-sqlite)
+
+---
+
+Many thanks to the [<img src="resources/jetbrains.svg" width="100px"/>](https://www.jetbrains.com "JetBrains") for donating awesome suite of tools making this project possible.
