@@ -34,12 +34,14 @@ namespace Serilog.Sinks.SQLite
         private readonly string _tableName;
         private readonly TimeSpan? _retentionPeriod;
         private readonly Stopwatch _retentionWatch = new Stopwatch();
+        private readonly TimeSpan? _retentionCheckInterval;
 
         public SQLiteSink(string sqlLiteDbPath,
             string tableName,
             IFormatProvider formatProvider,
             bool storeTimestampInUtc,
-            TimeSpan? retentionPeriod)
+            TimeSpan? retentionPeriod,
+            TimeSpan? retentionCheckInterval)
         {
             _connString = CreateConnectionString(sqlLiteDbPath);
             _tableName = tableName;
@@ -47,9 +49,14 @@ namespace Serilog.Sinks.SQLite
             _storeTimestampInUtc = storeTimestampInUtc;
 
             if (retentionPeriod.HasValue)
+            {
                 // impose a min retention period of 1 minute
                 _retentionPeriod = new[] { retentionPeriod.Value, TimeSpan.FromMinutes(1) }.Max();
-           
+
+                // check for retention at this interval - or use retentionPeriod if not specified
+                _retentionCheckInterval = retentionCheckInterval ?? _retentionPeriod.Value;
+            }
+
             InitializeDatabase();
         }
 
@@ -162,7 +169,7 @@ namespace Serilog.Sinks.SQLite
                 // there is no retention policy
                 return;
 
-            if (_retentionWatch.IsRunning && _retentionWatch.Elapsed < _retentionPeriod.Value)
+            if (_retentionWatch.IsRunning && _retentionWatch.Elapsed < _retentionCheckInterval.Value)
                 // Besides deleting records older than X 
                 // let's only delete records every X often
                 // because of the check whether the _retentionWatch is running,
