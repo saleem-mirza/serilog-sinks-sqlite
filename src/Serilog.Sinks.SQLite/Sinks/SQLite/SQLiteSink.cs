@@ -131,8 +131,8 @@ namespace Serilog.Sinks.SQLite
                             foreach (var logEvent in logEventsBatch)
                             {
                                 sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                                    ? logEvent.Timestamp.ToUniversalTime()
-                                    : logEvent.Timestamp;
+                                    ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
+                                    : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
                                 sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                                 sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
                                 sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
@@ -186,7 +186,7 @@ namespace Serilog.Sinks.SQLite
             cmd.CommandText = $"DELETE FROM {_tableName} WHERE Timestamp < @epoch";
             cmd.Parameters.Add(new SQLiteParameter("@epoch", DbType.DateTime2)
             {
-                Value = _storeTimestampInUtc ? epoch.ToUniversalTime() : epoch
+                Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString("yyyy-MM-ddTHH:mm:ss")
             });
             return cmd;
         }
