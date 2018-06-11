@@ -34,12 +34,14 @@ namespace Serilog.Sinks.SQLite
         private readonly string _tableName;
         private readonly TimeSpan? _retentionPeriod;
         private readonly Stopwatch _retentionWatch = new Stopwatch();
+        private readonly TimeSpan? _retentionCheckInterval;
 
         public SQLiteSink(string sqlLiteDbPath,
             string tableName,
             IFormatProvider formatProvider,
             bool storeTimestampInUtc,
-            TimeSpan? retentionPeriod)
+            TimeSpan? retentionPeriod,
+            TimeSpan? retentionCheckInterval)
         {
             _connString = CreateConnectionString(sqlLiteDbPath);
             _tableName = tableName;
@@ -47,9 +49,14 @@ namespace Serilog.Sinks.SQLite
             _storeTimestampInUtc = storeTimestampInUtc;
 
             if (retentionPeriod.HasValue)
+            {
                 // impose a min retention period of 1 minute
                 _retentionPeriod = new[] { retentionPeriod.Value, TimeSpan.FromMinutes(1) }.Max();
-           
+
+                // check for retention at this interval - or use retentionPeriod if not specified
+                _retentionCheckInterval = retentionCheckInterval ?? _retentionPeriod.Value;
+            }
+
             InitializeDatabase();
         }
 
@@ -131,8 +138,8 @@ namespace Serilog.Sinks.SQLite
                             foreach (var logEvent in logEventsBatch)
                             {
                                 sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                                    ? logEvent.Timestamp.ToUniversalTime()
-                                    : logEvent.Timestamp;
+                                    ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
+                                    : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
                                 sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                                 sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
                                 sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
@@ -162,7 +169,7 @@ namespace Serilog.Sinks.SQLite
                 // there is no retention policy
                 return;
 
-            if (_retentionWatch.IsRunning && _retentionWatch.Elapsed < _retentionPeriod.Value)
+            if (_retentionWatch.IsRunning && _retentionWatch.Elapsed < _retentionCheckInterval.Value)
                 // Besides deleting records older than X 
                 // let's only delete records every X often
                 // because of the check whether the _retentionWatch is running,
@@ -186,7 +193,7 @@ namespace Serilog.Sinks.SQLite
             cmd.CommandText = $"DELETE FROM {_tableName} WHERE Timestamp < @epoch";
             cmd.Parameters.Add(new SQLiteParameter("@epoch", DbType.DateTime2)
             {
-                Value = _storeTimestampInUtc ? epoch.ToUniversalTime() : epoch
+                Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString("yyyy-MM-ddTHH:mm:ss")
             });
             return cmd;
         }

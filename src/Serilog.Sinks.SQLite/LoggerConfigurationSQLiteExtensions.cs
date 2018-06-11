@@ -45,7 +45,8 @@ namespace Serilog
             LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum,
             IFormatProvider formatProvider = null,
             bool storeTimestampInUtc = false,
-            TimeSpan? retentionPeriod = null)
+            TimeSpan? retentionPeriod = null,
+            TimeSpan? retentionCheckInterval = null)
         {
             if (loggerConfiguration == null)
             {
@@ -82,7 +83,8 @@ namespace Serilog
                         tableName,
                         formatProvider,
                         storeTimestampInUtc,
-                        retentionPeriod),
+                        retentionPeriod,
+                        retentionCheckInterval),
                     restrictedToMinimumLevel);
             }
             catch (Exception ex)
