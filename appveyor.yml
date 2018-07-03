@@ -19,4 +19,4 @@ deploy:
     secure: 3ysm3o1yzrnGt77dtYnAwQGR+XPT4Kuyjh9MuB9IrhQ/s+TE30X6v9LhRD1f7PVr
   skip_symbols: true
   on:
-    branch: /^(master|dev)$/
+    branch: /^(master)$/

@@ -36,7 +36,8 @@ namespace Serilog
         /// <param name="restrictedToMinimumLevel">The minimum log event level required in order to write an event to the sink.</param>
         /// <param name="formatProvider">Supplies culture-specific formatting information, or null.</param>
         /// <param name="storeTimestampInUtc">Store timestamp in UTC format</param>
-        /// <param name="retentionPeriod">The maximum time that a log entry will be kept in the database, or null to disable automatic deletion of old log entries. Non-null values smaller than 1 minute will be replaced with 1 minute.</param>
+        /// <param name="retentionPeriod">The maximum time that a log entry will be kept in the database, or null to disable automatic deletion of old log entries. Non-null values smaller than 30 minute will be replaced with 30 minute.</param>
+        /// <param name="retentionCheckInterval">Time period to execute TTL process. Time span should be in 15 minutes increment</param>
         /// <exception cref="ArgumentNullException">A required parameter is null.</exception>
         public static LoggerConfiguration SQLite(
             this LoggerSinkConfiguration loggerConfiguration,
@@ -48,32 +49,29 @@ namespace Serilog
             TimeSpan? retentionPeriod = null,
             TimeSpan? retentionCheckInterval = null)
         {
-            if (loggerConfiguration == null)
-            {
+            if (loggerConfiguration == null) {
                 SelfLog.WriteLine("Logger configuration is null");
+
                 throw new ArgumentNullException(nameof(loggerConfiguration));
             }
 
-            if (string.IsNullOrEmpty(sqliteDbPath))
-            {
+            if (string.IsNullOrEmpty(sqliteDbPath)) {
                 SelfLog.WriteLine("Invalid sqliteDbPath");
+
                 throw new ArgumentNullException(nameof(sqliteDbPath));
             }
 
             Uri sqliteDbPathUri;
-            if (!Uri.TryCreate(sqliteDbPath, UriKind.RelativeOrAbsolute, out sqliteDbPathUri))
-            {
+            if (!Uri.TryCreate(sqliteDbPath, UriKind.RelativeOrAbsolute, out sqliteDbPathUri)) {
                 throw new ArgumentException($"Invalid path {nameof(sqliteDbPath)}");
             }
 
-            if (!sqliteDbPathUri.IsAbsoluteUri)
-            {
+            if (!sqliteDbPathUri.IsAbsoluteUri) {
                 var basePath = System.Reflection.Assembly.GetEntryAssembly().Location;
                 sqliteDbPath = Path.Combine(Path.GetDirectoryName(basePath), sqliteDbPath);
             }
 
-            try
-            {
+            try {
                 var sqliteDbFile = new FileInfo(sqliteDbPath);
                 sqliteDbFile.Directory?.Create();
 
@@ -87,9 +85,9 @@ namespace Serilog
                         retentionCheckInterval),
                     restrictedToMinimumLevel);
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 SelfLog.WriteLine(ex.Message);
+
                 throw;
             }
         }

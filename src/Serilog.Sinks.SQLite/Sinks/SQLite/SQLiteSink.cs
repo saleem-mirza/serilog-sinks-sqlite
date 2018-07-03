@@ -23,6 +23,7 @@ using System.Diagnostics;
 using System.Linq;
 using Serilog.Sinks.Extensions;
 using System.Data.SQLite;
+using System.Threading;
 
 namespace Serilog.Sinks.SQLite
 {
@@ -33,35 +34,46 @@ namespace Serilog.Sinks.SQLite
         private readonly bool _storeTimestampInUtc;
         private readonly string _tableName;
         private readonly TimeSpan? _retentionPeriod;
-        private readonly Stopwatch _retentionWatch = new Stopwatch();
-        private readonly TimeSpan? _retentionCheckInterval;
+        private readonly Timer _retentionTimer;
 
-        public SQLiteSink(string sqlLiteDbPath,
+        public SQLiteSink(
+            string sqlLiteDbPath,
             string tableName,
             IFormatProvider formatProvider,
             bool storeTimestampInUtc,
             TimeSpan? retentionPeriod,
             TimeSpan? retentionCheckInterval)
         {
-            _connString = CreateConnectionString(sqlLiteDbPath);
-            _tableName = tableName;
-            _formatProvider = formatProvider;
+            _connString          = CreateConnectionString(sqlLiteDbPath);
+            _tableName           = tableName;
+            _formatProvider      = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
 
-            if (retentionPeriod.HasValue)
-            {
-                // impose a min retention period of 1 minute
-                _retentionPeriod = new[] { retentionPeriod.Value, TimeSpan.FromMinutes(1) }.Max();
+            if (retentionPeriod.HasValue) {
+                // impose a min retention period of 15 minute
+                var retentionCheckMinutes = 15;
+                if (retentionCheckInterval.HasValue) {
+                    retentionCheckMinutes = Math.Max(retentionCheckMinutes, retentionCheckInterval.Value.Minutes);
+                }
+
+                // impose multiple of 15 minute interval
+                retentionCheckMinutes = (retentionCheckMinutes / 15) * 15;
+
+                _retentionPeriod = new[] {retentionPeriod, TimeSpan.FromMinutes(30)}.Max();
 
                 // check for retention at this interval - or use retentionPeriod if not specified
-                _retentionCheckInterval = retentionCheckInterval ?? _retentionPeriod.Value;
+                _retentionTimer = new Timer(
+                    (x) => { ApplyRetentionPolicy(); },
+                    null,
+                    TimeSpan.FromMinutes(0),
+                    TimeSpan.FromMinutes(retentionCheckMinutes));
             }
 
             InitializeDatabase();
         }
 
         private static string CreateConnectionString(string dbPath) =>
-            new SQLiteConnectionStringBuilder { DataSource = dbPath }.ConnectionString;
+            new SQLiteConnectionStringBuilder {DataSource = dbPath}.ConnectionString;
 
         #region ILogEvent implementation
 
@@ -82,6 +94,7 @@ namespace Serilog.Sinks.SQLite
         {
             var sqlConnection = new SQLiteConnection(_connString);
             sqlConnection.Open();
+
             return sqlConnection;
         }
 
@@ -104,7 +117,7 @@ namespace Serilog.Sinks.SQLite
         {
             var sqlInsertText = "INSERT INTO {0} (Timestamp, Level, Exception, RenderedMessage, Properties)";
             sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
-            sqlInsertText = string.Format(sqlInsertText, _tableName);
+            sqlInsertText =  string.Format(sqlInsertText, _tableName);
 
             var sqlCommand = connection.CreateCommand();
             sqlCommand.CommandText = sqlInsertText;
@@ -123,25 +136,20 @@ namespace Serilog.Sinks.SQLite
         {
             if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
                 return;
-            try
-            {
-                using (var sqlConnection = GetSqLiteConnection())
-                {
-                    ApplyRetentionPolicy(sqlConnection);
 
-                    using (var tr = sqlConnection.BeginTransaction())
-                    {
-                        using (var sqlCommand = CreateSqlInsertCommand(sqlConnection))
-                        {
+            try {
+                using (var sqlConnection = GetSqLiteConnection()) {
+                    using (var tr = sqlConnection.BeginTransaction()) {
+                        using (var sqlCommand = CreateSqlInsertCommand(sqlConnection)) {
                             sqlCommand.Transaction = tr;
 
-                            foreach (var logEvent in logEventsBatch)
-                            {
+                            foreach (var logEvent in logEventsBatch) {
                                 sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
                                     ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
                                     : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
                                 sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                                sqlCommand.Parameters["@exception"].Value = logEvent.Exception?.ToString() ?? string.Empty;
+                                sqlCommand.Parameters["@exception"].Value =
+                                    logEvent.Exception?.ToString() ?? string.Empty;
                                 sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
 
                                 sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
@@ -151,50 +159,40 @@ namespace Serilog.Sinks.SQLite
                                 sqlCommand.ExecuteNonQuery();
                             }
                         }
+
                         tr.Commit();
                     }
 
                     sqlConnection.Close();
                 }
             }
-            catch (Exception e)
-            {
+            catch (Exception e) {
                 SelfLog.WriteLine(e.Message);
             }
         }
 
-        private void ApplyRetentionPolicy(SQLiteConnection sqlConnection)
+        private void ApplyRetentionPolicy()
         {
-            if (!_retentionPeriod.HasValue)
-                // there is no retention policy
-                return;
-
-            if (_retentionWatch.IsRunning && _retentionWatch.Elapsed < _retentionCheckInterval.Value)
-                // Besides deleting records older than X 
-                // let's only delete records every X often
-                // because of the check whether the _retentionWatch is running,
-                // the first write operation during this application run
-                // will result in deleting old records
-                return;
-
             var epoch = DateTimeOffset.Now.Subtract(_retentionPeriod.Value);
-            using (var cmd = CreateSqlDeleteCommand(sqlConnection, epoch))
-            {
-                SelfLog.WriteLine("Deleting log entries older than {0}", epoch);
-                cmd.ExecuteNonQuery();
+            using (var sqlConnection = GetSqLiteConnection()) {
+                using (var cmd = CreateSqlDeleteCommand(sqlConnection, epoch)) {
+                    SelfLog.WriteLine("Deleting log entries older than {0}", epoch);
+                    var ret = cmd.ExecuteNonQuery();
+                    SelfLog.WriteLine($"{ret} records deleted");
+                }
             }
-
-            _retentionWatch.Restart();
         }
 
         private SQLiteCommand CreateSqlDeleteCommand(SQLiteConnection sqlConnection, DateTimeOffset epoch)
         {
             var cmd = sqlConnection.CreateCommand();
             cmd.CommandText = $"DELETE FROM {_tableName} WHERE Timestamp < @epoch";
-            cmd.Parameters.Add(new SQLiteParameter("@epoch", DbType.DateTime2)
-            {
-                Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString("yyyy-MM-ddTHH:mm:ss")
-            });
+            cmd.Parameters.Add(
+                new SQLiteParameter("@epoch", DbType.DateTime2)
+                {
+                    Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString("yyyy-MM-ddTHH:mm:ss")
+                });
+
             return cmd;
         }
     }
