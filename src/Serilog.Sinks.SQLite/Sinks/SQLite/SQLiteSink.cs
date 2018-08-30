@@ -48,6 +48,8 @@ namespace Serilog.Sinks.SQLite
             _tableName           = tableName;
             _formatProvider      = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
+            
+            InitializeDatabase();
 
             if (retentionPeriod.HasValue) {
                 // impose a min retention period of 15 minute
@@ -68,8 +70,7 @@ namespace Serilog.Sinks.SQLite
                     TimeSpan.FromMinutes(0),
                     TimeSpan.FromMinutes(retentionCheckMinutes));
             }
-
-            InitializeDatabase();
+            
         }
 
         private static string CreateConnectionString(string dbPath) =>
