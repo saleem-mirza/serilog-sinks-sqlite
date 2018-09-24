@@ -19,6 +19,7 @@ namespace Serilog
     using System;
     using System.IO;
     using Serilog.Configuration;
+    using Serilog.Core;
     using Serilog.Events;
     using Serilog.Sinks.SQLite;
 
@@ -38,6 +39,10 @@ namespace Serilog
         /// <param name="storeTimestampInUtc">Store timestamp in UTC format</param>
         /// <param name="retentionPeriod">The maximum time that a log entry will be kept in the database, or null to disable automatic deletion of old log entries. Non-null values smaller than 30 minute will be replaced with 30 minute.</param>
         /// <param name="retentionCheckInterval">Time period to execute TTL process. Time span should be in 15 minutes increment</param>
+        /// <param name="levelSwitch">
+        /// A switch allowing the pass-through minimum level to be changed at runtime.
+        /// </param>
+        /// <exception cref="ArgumentException"></exception>
         /// <exception cref="ArgumentNullException">A required parameter is null.</exception>
         public static LoggerConfiguration SQLite(
             this LoggerSinkConfiguration loggerConfiguration,
@@ -47,7 +52,8 @@ namespace Serilog
             IFormatProvider formatProvider = null,
             bool storeTimestampInUtc = false,
             TimeSpan? retentionPeriod = null,
-            TimeSpan? retentionCheckInterval = null)
+            TimeSpan? retentionCheckInterval = null,
+            LoggingLevelSwitch levelSwitch = null)
         {
             if (loggerConfiguration == null) {
                 SelfLog.WriteLine("Logger configuration is null");
@@ -83,7 +89,8 @@ namespace Serilog
                         storeTimestampInUtc,
                         retentionPeriod,
                         retentionCheckInterval),
-                    restrictedToMinimumLevel);
+                    restrictedToMinimumLevel,
+                    levelSwitch);
             }
             catch (Exception ex) {
                 SelfLog.WriteLine(ex.Message);

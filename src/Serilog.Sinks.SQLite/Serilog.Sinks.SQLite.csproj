@@ -1,29 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <AssemblyTitle>Serilog.Sinks.SQLite</AssemblyTitle>
-    <Authors>Saleem Mirza</Authors>
-    <AssemblyName>Serilog.Sinks.SQLite</AssemblyName>
-    <Description>Serilog event sink that writes to SQLite database</Description>
-    <PackageId>Serilog.Sinks.SQLite</PackageId>
-    <PackageTags>serilog;logging;SQLite</PackageTags>
-    <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
-    <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
-    <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
-    <Copyright>Copyright © Zethian Inc. 2013-2017</Copyright>
-    <AssemblyVersion>4.0.1.0</AssemblyVersion>
-    <Version>4.0.1</Version>
-    <SignAssembly>True</SignAssembly>
-    <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
-    <TargetFrameworks>netstandard2.0;net452</TargetFrameworks>
-    <FileVersion>4.0.1.0</FileVersion>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(VersionSuffix)'!='' ">
-    <Version>$(Version)-$(VersionSuffix)</Version>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.CSharp" Version="4.5.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="Serilog" Version="2.7.1" />
-    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.109.1" />
-  </ItemGroup>
+    <PropertyGroup>
+        <AssemblyTitle>Serilog.Sinks.SQLite</AssemblyTitle>
+        <Authors>Saleem Mirza</Authors>
+        <AssemblyName>Serilog.Sinks.SQLite</AssemblyName>
+        <Description>Serilog event sink that writes to SQLite database</Description>
+        <PackageId>Serilog.Sinks.SQLite</PackageId>
+        <PackageTags>serilog;logging;SQLite</PackageTags>
+        <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
+        <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
+        <PackageLicenseUrl>http://www.apache.org/licenses/LICENSE-2.0</PackageLicenseUrl>
+        <RepositoryUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <Copyright>Copyright © Zethian Inc. 2013-2018</Copyright>
+        <AssemblyVersion>4.2.1.0</AssemblyVersion>
+        <Version>4.2.1</Version>
+        <SignAssembly>True</SignAssembly>
+        <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
+        <TargetFrameworks>netstandard2.0;net452</TargetFrameworks>
+        <FileVersion>4.2.1.0</FileVersion>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(VersionSuffix)'!='' ">
+        <Version>$(Version)-$(VersionSuffix)</Version>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CSharp" Version="4.5.0"/>
+        <PackageReference Include="Newtonsoft.Json" Version="11.0.2"/>
+        <PackageReference Include="Serilog" Version="2.7.1"/>
+        <PackageReference Include="System.Data.SQLite.Core" Version="1.0.109.1"/>
+    </ItemGroup>
 </Project>
