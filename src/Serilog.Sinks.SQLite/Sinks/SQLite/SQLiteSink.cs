@@ -24,6 +24,7 @@ using System.Linq;
 using Serilog.Sinks.Extensions;
 using System.Data.SQLite;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Serilog.Sinks.SQLite
 {
@@ -133,45 +134,6 @@ namespace Serilog.Sinks.SQLite
             return sqlCommand;
         }
 
-        protected override void WriteLogEvent(ICollection<LogEvent> logEventsBatch)
-        {
-            if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
-                return;
-
-            try {
-                using (var sqlConnection = GetSqLiteConnection()) {
-                    using (var tr = sqlConnection.BeginTransaction()) {
-                        using (var sqlCommand = CreateSqlInsertCommand(sqlConnection)) {
-                            sqlCommand.Transaction = tr;
-
-                            foreach (var logEvent in logEventsBatch) {
-                                sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                                    ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
-                                    : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
-                                sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                                sqlCommand.Parameters["@exception"].Value =
-                                    logEvent.Exception?.ToString() ?? string.Empty;
-                                sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
-
-                                sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
-                                    ? logEvent.Properties.Json()
-                                    : string.Empty;
-
-                                sqlCommand.ExecuteNonQuery();
-                            }
-                        }
-
-                        tr.Commit();
-                    }
-
-                    sqlConnection.Close();
-                }
-            }
-            catch (Exception e) {
-                SelfLog.WriteLine(e.Message);
-            }
-        }
-
         private void ApplyRetentionPolicy()
         {
             var epoch = DateTimeOffset.Now.Subtract(_retentionPeriod.Value);
@@ -195,6 +157,48 @@ namespace Serilog.Sinks.SQLite
                 });
 
             return cmd;
+        }
+
+        protected override async Task<bool> WriteLogEventAsync(ICollection<LogEvent> logEventsBatch)
+        {
+            if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
+                return true;
+
+            try {
+                using (var sqlConnection = GetSqLiteConnection()) {
+                    using (var tr = sqlConnection.BeginTransaction()) {
+                        using (var sqlCommand = CreateSqlInsertCommand(sqlConnection)) {
+                            sqlCommand.Transaction = tr;
+
+                            foreach (var logEvent in logEventsBatch) {
+                                sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
+                                    ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
+                                    : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
+                                sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
+                                sqlCommand.Parameters["@exception"].Value =
+                                    logEvent.Exception?.ToString() ?? string.Empty;
+                                sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+
+                                sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
+                                    ? logEvent.Properties.Json()
+                                    : string.Empty;
+
+                                await sqlCommand.ExecuteNonQueryAsync();
+                            }
+                        }
+
+                        tr.Commit();
+                    }
+
+                    sqlConnection.Close();
+                    return true;
+                }
+            }
+            catch (Exception e) {
+                SelfLog.WriteLine(e.Message);
+            }
+
+            return false;
         }
     }
 }
