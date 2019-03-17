@@ -65,9 +65,10 @@ namespace Serilog.Sinks.Batch
         private async Task Pump()
         {
             try {
-                while (true) {
+                while (!_batchEventsCollection.IsCompleted) {
                     var logEvents = _batchEventsCollection.Take(_cancellationTokenSource.Token);
                     SelfLog.WriteLine($"Sending batch of {logEvents.Count} logs");
+
                     var retValue = await WriteLogEventAsync(logEvents).ConfigureAwait(false);
                     if (retValue) {
                         Interlocked.Add(ref _numMessages, -1 * logEvents.Count);
@@ -104,7 +105,7 @@ namespace Serilog.Sinks.Batch
         private void EventPump()
         {
             try {
-                while (true) {
+                while (!_eventsCollection.IsCompleted) {
                     var logEvent = _eventsCollection.Take(_cancellationTokenSource.Token);
                     _logEventBatch.Enqueue(logEvent);
 
@@ -153,8 +154,11 @@ namespace Serilog.Sinks.Batch
             if (_numMessages > _maxBufferSize)
                 return;
 
-            _eventsCollection.Add(logEvent);
-            Interlocked.Increment(ref _numMessages);
+            if(!_eventsCollection.IsCompleted)
+            {
+                _eventsCollection.Add(logEvent);
+                Interlocked.Increment(ref _numMessages);
+            }
         }
 
         protected abstract Task<bool> WriteLogEventAsync(ICollection<LogEvent> logEventsBatch);
@@ -167,6 +171,9 @@ namespace Serilog.Sinks.Batch
         {
             if (!_disposedValue) {
                 if (disposing) {
+                    
+                    _eventsCollection.CompleteAdding();
+      
                     FlushAndCloseEventHandlers();
                     _semaphoreSlim.Dispose();
                     
@@ -197,6 +204,8 @@ namespace Serilog.Sinks.Batch
                 FlushLogEventBatch();
 
                 // request cancellation of all tasks
+                
+                _batchEventsCollection.CompleteAdding();
                 _cancellationTokenSource.Cancel();
 
                 // Flush events batch
@@ -205,7 +214,7 @@ namespace Serilog.Sinks.Batch
                     WriteLogEventAsync(eventBatch).Wait(TimeSpan.FromSeconds(30));
                 }
 
-                Task.WaitAll(new[] {_eventPumpTask, _batchTask, _timerTask}, TimeSpan.FromSeconds(30));
+                Task.WaitAll(new[] {_eventPumpTask, _batchTask, _timerTask}, TimeSpan.FromSeconds(60));
             }
             catch (Exception ex) {
                 SelfLog.WriteLine(ex.Message);
