@@ -75,7 +75,13 @@ namespace Serilog.Sinks.SQLite
         }
 
         private static string CreateConnectionString(string dbPath) =>
-            new SQLiteConnectionStringBuilder {DataSource = dbPath}.ConnectionString;
+            new SQLiteConnectionStringBuilder
+            {
+                CacheSize = 500,
+                DataSource = dbPath,
+                JournalMode = SQLiteJournalModeEnum.Memory,
+                SyncMode = SynchronizationModes.Off
+            }.ConnectionString + ";locking mode=EXCLUSIVE;temp store=MEMORY;";;
 
         #region ILogEvent implementation
 
