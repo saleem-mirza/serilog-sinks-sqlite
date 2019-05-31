@@ -44,7 +44,7 @@ namespace Serilog
         /// A switch allowing the pass-through minimum level to be changed at runtime.
         /// </param>
         /// <param name="maxDatabaseSize">Maximum database file size can grow in MB. Default 10 MB, maximum 20 GB</param>
-        /// <param name="rollOver">If file size grows past max database size, backup database to new name and create new database file</param>
+        /// <param name="rollOver">If file size grows past max database size, creating rolling backup</param>
         /// <exception cref="ArgumentException"></exception>
         /// <exception cref="ArgumentNullException">A required parameter is null.</exception>
         public static LoggerConfiguration SQLite(
