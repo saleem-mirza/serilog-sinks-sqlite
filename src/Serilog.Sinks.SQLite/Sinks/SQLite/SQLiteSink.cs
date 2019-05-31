@@ -200,14 +200,14 @@ namespace Serilog.Sinks.SQLite
         {
             if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
                 return true;
-            await semaphoreSlim.WaitAsync();
+            await semaphoreSlim.WaitAsync().ConfigureAwait(false);
             try
             {
                 using (var sqlConnection = GetSqLiteConnection())
                 {
                     try
                     {
-                        await WriteToDatabase(logEventsBatch, sqlConnection);
+                        await WriteToDatabaseAsync(logEventsBatch, sqlConnection).ConfigureAwait(false);
                         return true;
                     }
                     catch (SQLiteException e)
@@ -231,7 +231,7 @@ namespace Serilog.Sinks.SQLite
                         File.Copy(_databasePath, Path.Combine(Path.GetDirectoryName(_databasePath), newFilePath), true);
 
                         TruncateLog(sqlConnection);
-                        await WriteToDatabase(logEventsBatch, sqlConnection);
+                        await WriteToDatabaseAsync(logEventsBatch, sqlConnection).ConfigureAwait(false);
 
                         SelfLog.WriteLine($"Rolling database to {newFilePath}");
                         return true;
@@ -249,7 +249,7 @@ namespace Serilog.Sinks.SQLite
             }
         }
 
-        private async Task WriteToDatabase(ICollection<LogEvent> logEventsBatch, SQLiteConnection sqlConnection)
+        private async Task WriteToDatabaseAsync(ICollection<LogEvent> logEventsBatch, SQLiteConnection sqlConnection)
         {
             using (var tr = sqlConnection.BeginTransaction())
             {
@@ -265,7 +265,7 @@ namespace Serilog.Sinks.SQLite
                         sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                         sqlCommand.Parameters["@exception"].Value =
                             logEvent.Exception?.ToString() ?? string.Empty;
-                        sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+                        sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.Text;
 
                         sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
                             ? logEvent.Properties.Json()
