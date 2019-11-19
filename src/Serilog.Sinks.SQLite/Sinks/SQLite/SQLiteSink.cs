@@ -121,7 +121,7 @@ namespace Serilog.Sinks.SQLite
                 MaxPageCount = (int)(_maxDatabaseSize * BytesPerMb / MaxSupportedPageSize)
             }.ConnectionString;
 
-            var sqLiteConnection = new SQLiteConnection(sqlConString);
+            var sqLiteConnection = new SQLiteConnection(sqlConString, true);
             sqLiteConnection.Open();
 
             return sqLiteConnection;
