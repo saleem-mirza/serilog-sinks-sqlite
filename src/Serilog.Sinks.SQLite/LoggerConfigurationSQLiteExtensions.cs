@@ -50,6 +50,7 @@ namespace Serilog
         public static LoggerConfiguration SQLite(
             this LoggerSinkConfiguration loggerConfiguration,
             string sqliteDbPath,
+            string password = null,
             string tableName = "Logs",
             LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum,
             IFormatProvider formatProvider = null,
@@ -89,6 +90,7 @@ namespace Serilog
                 return loggerConfiguration.Sink(
                     new SQLiteSink(
                         sqliteDbFile.FullName,
+                        password,
                         tableName,
                         formatProvider,
                         storeTimestampInUtc,

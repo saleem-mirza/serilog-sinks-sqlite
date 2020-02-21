@@ -31,6 +31,7 @@ namespace Serilog.Sinks.SQLite
     internal class SQLiteSink : BatchProvider, ILogEventSink
     {
         private readonly string _databasePath;
+        private readonly string _password;
         private readonly IFormatProvider _formatProvider;
         private readonly bool _storeTimestampInUtc;
         private readonly uint _maxDatabaseSize;
@@ -46,6 +47,7 @@ namespace Serilog.Sinks.SQLite
 
         public SQLiteSink(
             string sqlLiteDbPath,
+            string password,
             string tableName,
             IFormatProvider formatProvider,
             bool storeTimestampInUtc,
@@ -56,6 +58,7 @@ namespace Serilog.Sinks.SQLite
             bool rollOver = true) : base(batchSize: (int)batchSize, maxBufferSize: 100_000)
         {
             _databasePath = sqlLiteDbPath;
+            _password = password;
             _tableName = tableName;
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
@@ -114,6 +117,7 @@ namespace Serilog.Sinks.SQLite
             var sqlConString = new SQLiteConnectionStringBuilder
             {
                 DataSource = _databasePath,
+                Password = _password,
                 JournalMode = SQLiteJournalModeEnum.Memory,
                 SyncMode = SynchronizationModes.Normal,
                 CacheSize = 500,
