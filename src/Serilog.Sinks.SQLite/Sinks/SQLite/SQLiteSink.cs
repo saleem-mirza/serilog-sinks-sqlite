@@ -180,6 +180,15 @@ namespace Serilog.Sinks.SQLite
             var cmd = sqlConnection.CreateCommand();
             cmd.CommandText = $"DELETE FROM {_tableName}";
             cmd.ExecuteNonQuery();
+
+            VacuumDatabase(sqlConnection);
+        }
+
+        private void VacuumDatabase(SQLiteConnection sqlConnection)
+        {
+            var cmd = sqlConnection.CreateCommand();
+            cmd.CommandText = $"vacuum";
+            cmd.ExecuteNonQuery();
         }
 
         private SQLiteCommand CreateSqlDeleteCommand(SQLiteConnection sqlConnection, DateTimeOffset epoch)
