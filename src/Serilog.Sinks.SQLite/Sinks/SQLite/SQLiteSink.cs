@@ -236,7 +236,7 @@ namespace Serilog.Sinks.SQLite
                         var dbExtension = Path.GetExtension(_databasePath);
 
                         var newFilePath = Path.Combine(Path.GetDirectoryName(_databasePath) ?? "Logs",
-                            $"{Path.GetFileNameWithoutExtension(_databasePath)}-{DateTime.Now:yyyyMMdd_hhmmss.ff}{dbExtension}");
+                            $"{Path.GetFileNameWithoutExtension(_databasePath)}-{DateTime.Now:yyyyMMdd_HHmmss.ff}{dbExtension}");
                          
                         File.Copy(_databasePath, newFilePath, true);
 
