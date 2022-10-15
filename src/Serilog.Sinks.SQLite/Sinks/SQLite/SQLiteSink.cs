@@ -275,7 +275,7 @@ namespace Serilog.Sinks.SQLite
                         sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                         sqlCommand.Parameters["@exception"].Value =
                             logEvent.Exception?.ToString() ?? string.Empty;
-                        sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.ToString();
+                        sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.Render(logEvent.Properties, _formatProvider);
 
                         sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
                             ? logEvent.Properties.Json()
