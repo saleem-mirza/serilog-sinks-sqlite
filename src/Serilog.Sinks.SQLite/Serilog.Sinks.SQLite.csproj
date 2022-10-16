@@ -8,7 +8,7 @@
         <PackageTags>serilog;logging;SQLite</PackageTags>
         <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
         <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite</RepositoryUrl>
+        <RepositoryUrl>https://github.com/spoland/serilog-sinks-sqlite</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <Copyright>Copyright © Zethian Inc. 2013-2019</Copyright>
         <AssemblyVersion>5.5.0.0</AssemblyVersion>
