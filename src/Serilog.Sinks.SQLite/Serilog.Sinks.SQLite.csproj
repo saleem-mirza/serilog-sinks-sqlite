@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <AssemblyTitle>Serilog.Sinks.SQLite</AssemblyTitle>
-        <Authors>Saleem Mirza</Authors>
+        <Authors>Stephen Poland</Authors>
         <AssemblyName>Serilog.Sinks.SQLite</AssemblyName>
         <Description>Serilog event sink that writes to SQLite database</Description>
         <PackageId>Serilog.Sinks.SQLite</PackageId>
@@ -12,7 +12,7 @@
         <RepositoryType>git</RepositoryType>
         <Copyright>Copyright © Zethian Inc. 2013-2019</Copyright>
         <AssemblyVersion>5.5.0.0</AssemblyVersion>
-        <Version>5.5.0</Version>
+        <Version>5.5.1</Version>
         <SignAssembly>True</SignAssembly>
         <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
         <TargetFrameworks>net5.0;net452</TargetFrameworks>
