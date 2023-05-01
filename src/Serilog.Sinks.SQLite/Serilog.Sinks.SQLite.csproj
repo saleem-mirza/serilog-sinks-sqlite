@@ -10,13 +10,13 @@
         <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
         <RepositoryUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <Copyright>Copyright © Zethian Inc. 2013-2019</Copyright>
-        <AssemblyVersion>5.5.0.0</AssemblyVersion>
-        <Version>5.5.0</Version>
+        <Copyright>Copyright © Zethian Inc. 2020-2030</Copyright>
+        <AssemblyVersion>6.0.0.0</AssemblyVersion>
+        <Version>6.0.0</Version>
         <SignAssembly>True</SignAssembly>
         <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
-        <TargetFrameworks>net5.0;net452</TargetFrameworks>
-        <FileVersion>5.5.0.0</FileVersion>
+        <TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
+        <FileVersion>6.0.0.0</FileVersion>
     </PropertyGroup>
     <PropertyGroup>
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -35,8 +35,19 @@
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-        <PackageReference Include="Serilog" Version="2.11.0" />
-        <PackageReference Include="System.Data.SQLite.Core" Version="1.0.116" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Serilog" Version="2.12.0" />
+        <PackageReference Include="SQLite" Version="3.13.0" />
+        <PackageReference Include="System.Data.SQLite.Core" Version="1.0.115.5" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+      <PackageReference Include="Microsoft.Data.Sqlite.Core">
+        <Version>7.0.5</Version>
+      </PackageReference>
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
+      <PackageReference Include="Microsoft.Data.Sqlite.Core">
+        <Version>7.0.5</Version>
+      </PackageReference>
     </ItemGroup>
 </Project>
