@@ -38,12 +38,13 @@ namespace Serilog.Sinks.SQLite
         private readonly string _tableName;
         private readonly TimeSpan? _retentionPeriod;
         private readonly Timer _retentionTimer;
+        private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fff";
         private const long BytesPerMb = 1_048_576;
         private const long MaxSupportedPages = 5_242_880;
         private const long MaxSupportedPageSize = 4096;
         private const long MaxSupportedDatabaseSize = unchecked(MaxSupportedPageSize * MaxSupportedPages) / 1048576;
         private static SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
-
+        
         public SQLiteSink(
             string sqlLiteDbPath,
             string tableName,
@@ -199,7 +200,7 @@ namespace Serilog.Sinks.SQLite
                 new SQLiteParameter("@epoch", DbType.DateTime2)
                 {
                     Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString(
-                        "yyyy-MM-ddTHH:mm:ss")
+                        TimestampFormat)
                 });
 
             return cmd;
@@ -270,8 +271,8 @@ namespace Serilog.Sinks.SQLite
                     foreach (var logEvent in logEventsBatch)
                     {
                         sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                            ? logEvent.Timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
-                            : logEvent.Timestamp.ToString("yyyy-MM-ddTHH:mm:ss");
+                            ? logEvent.Timestamp.ToUniversalTime().ToString(TimestampFormat)
+                            : logEvent.Timestamp.ToString(TimestampFormat);
                         sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
                         sqlCommand.Parameters["@exception"].Value =
                             logEvent.Exception?.ToString() ?? string.Empty;
