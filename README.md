@@ -1,7 +1,9 @@
 # Serilog.Sinks.SQLite
+
 A lightweight, high-performance Serilog sink that writes to a SQLite database.
 
 ## Getting started
+
 Install [Serilog.Sinks.SQLite](https://www.nuget.org/packages/Serilog.Sinks.SQLite) from NuGet:
 
 ```PowerShell
@@ -33,8 +35,8 @@ logger.Information("This informational message will be written to SQLite databas
 ```
 
 ### Journal mode
-Default is **WAL** (write-ahead log) — crash-safe with concurrent readers. WAL is persisted in the
-database file, so the first run against an older database converts it. To opt out of WAL, set
+
+Default is **WAL** (write-ahead log) — crash-safe with concurrent readers. WAL is persisted in the database file, so the first run against an older database converts it. To opt out of WAL, set
 `journalMode: SqliteJournalMode.Memory` (fast, but corrupts on crash) or `Delete` (legacy default).
 
 ### Buffer overflow
@@ -43,6 +45,7 @@ queue fills (slow disk, stuck writer), additional events are dropped and the run
 reported through Serilog's `SelfLog` at 1, 1000, 2000, … events.
 
 ### Roll-over
+
 When the database reaches `maxDatabaseSize`, the sink uses `VACUUM INTO` to produce an atomic
 sibling backup named `<name>-yyyyMMdd_HHmmss.ff-<guid>.db`, then truncates and reuses the
 original file. Sidecar WAL contents are captured. Disable with `rollOver: false` to instead drop
@@ -76,15 +79,15 @@ In `App.config` / `Web.config`:
 ```
 
 ## Performance
+
 The sink buffers events internally and flushes to SQLite in batches on a dedicated thread.
-Properties are serialised once outside the database transaction, so commit latency is bounded
-by I/O rather than JSON work. When a `retentionPeriod` is configured, the sink also creates
+Properties are serialised once outside the database transaction, so commit latency is bounded by I/O rather than JSON work. When a `retentionPeriod` is configured, the sink also creates
 `IX_<table>_Timestamp` so the periodic delete is O(log n) instead of a full scan.
 
 ## Breaking changes in 7.0
+
 - Targets `netstandard2.0` + `net8.0`; `net7.0` dropped.
 - `Serilog` 4.x required.
 - Storage layer switched to **`Microsoft.Data.Sqlite`** (was `System.Data.SQLite`). True cross-platform — no native interop quirks on Linux/macOS.
 - Properties JSON now produced by **`System.Text.Json`** (was `Newtonsoft.Json`). Output uses the relaxed encoder so payloads stay human-readable, but `<`, `>`, `&`, `'` will not be escaped to `\u00xx` anymore.
-- Default `journalMode` is now `Wal` — written into existing database files on first open. Roll back to `Memory` to recover the previous behaviour.
 - `Exception` and `Properties` columns store `NULL` when the event has none (previously empty strings).
