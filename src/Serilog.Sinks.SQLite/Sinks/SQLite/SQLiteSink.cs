@@ -1,11 +1,11 @@
-﻿// Copyright 2016 Serilog Contributors
-// 
+// Copyright 2016 Serilog Contributors
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,12 +14,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Data.SQLite;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Serilog.Core;
 using Serilog.Debugging;
 using Serilog.Events;
@@ -36,15 +35,20 @@ namespace Serilog.Sinks.SQLite
         private readonly uint _maxDatabaseSize;
         private readonly bool _rollOver;
         private readonly string _tableName;
+        private readonly string _quotedTable;
         private readonly TimeSpan? _retentionPeriod;
         private readonly Timer _retentionTimer;
+        private readonly string _journalMode;
+
         private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fff";
         private const long BytesPerMb = 1_048_576;
         private const long MaxSupportedPages = 5_242_880;
         private const long MaxSupportedPageSize = 4096;
-        private const long MaxSupportedDatabaseSize = unchecked(MaxSupportedPageSize * MaxSupportedPages) / 1048576;
-        private static SemaphoreSlim semaphoreSlim = new SemaphoreSlim(1, 1);
-        
+        private const long MaxSupportedDatabaseSize = MaxSupportedPageSize * MaxSupportedPages / BytesPerMb;
+
+        // Microsoft.Data.Sqlite exposes the raw native error code; SQLITE_FULL = 13.
+        private const int SqliteFullErrorCode = 13;
+
         public SQLiteSink(
             string sqlLiteDbPath,
             string tableName,
@@ -54,81 +58,110 @@ namespace Serilog.Sinks.SQLite
             TimeSpan? retentionCheckInterval,
             uint batchSize = 100,
             uint maxDatabaseSize = 10,
-            bool rollOver = true) : base(batchSize: (int)batchSize, maxBufferSize: 100_000)
+            bool rollOver = true,
+            SqliteJournalMode journalMode = SqliteJournalMode.Wal)
+            : base(batchSize: (int)batchSize, maxBufferSize: 100_000)
         {
+            if (maxDatabaseSize > MaxSupportedDatabaseSize)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(maxDatabaseSize),
+                    $"Database size greater than {MaxSupportedDatabaseSize} MB is not supported");
+            }
+
             _databasePath = sqlLiteDbPath;
             _tableName = tableName;
+            _quotedTable = QuoteIdent(tableName);
             _formatProvider = formatProvider;
             _storeTimestampInUtc = storeTimestampInUtc;
             _maxDatabaseSize = maxDatabaseSize;
             _rollOver = rollOver;
+            _journalMode = MapJournalMode(journalMode);
 
-            if (maxDatabaseSize > MaxSupportedDatabaseSize)
+            if (retentionPeriod.HasValue)
             {
-                throw new SQLiteException($"Database size greater than {MaxSupportedDatabaseSize} MB is not supported");
+                _retentionPeriod = new[] { retentionPeriod, TimeSpan.FromMinutes(30) }.Max();
             }
 
             InitializeDatabase();
 
-            if (retentionPeriod.HasValue)
+            if (_retentionPeriod.HasValue)
             {
-                // impose a min retention period of 15 minute
-                var retentionCheckMinutes = 15;
-                if (retentionCheckInterval.HasValue)
-                {
-                    retentionCheckMinutes = Math.Max(retentionCheckMinutes, retentionCheckInterval.Value.Minutes);
-                }
+                var checkMinutes = retentionCheckInterval.HasValue
+                    ? Math.Max(15, (int)retentionCheckInterval.Value.TotalMinutes)
+                    : 15;
+                checkMinutes = checkMinutes / 15 * 15;
 
-                // impose multiple of 15 minute interval
-                retentionCheckMinutes = (retentionCheckMinutes / 15) * 15;
-
-                _retentionPeriod = new[] { retentionPeriod, TimeSpan.FromMinutes(30) }.Max();
-
-                // check for retention at this interval - or use retentionPeriod if not specified
                 _retentionTimer = new Timer(
-                    (x) => { ApplyRetentionPolicy(); },
+                    _ => ApplyRetentionPolicy(),
                     null,
-                    TimeSpan.FromMinutes(0),
-                    TimeSpan.FromMinutes(retentionCheckMinutes));
+                    TimeSpan.Zero,
+                    TimeSpan.FromMinutes(checkMinutes));
             }
         }
 
         #region ILogEvent implementation
 
-        public void Emit(LogEvent logEvent)
-        {
-            PushEvent(logEvent);
-        }
+        public void Emit(LogEvent logEvent) => PushEvent(logEvent);
 
         #endregion
 
+        private static string QuoteIdent(string name)
+            => "\"" + name.Replace("\"", "\"\"") + "\"";
+
+        private static string MapJournalMode(SqliteJournalMode mode) => mode switch
+        {
+            SqliteJournalMode.Delete   => "DELETE",
+            SqliteJournalMode.Truncate => "TRUNCATE",
+            SqliteJournalMode.Persist  => "PERSIST",
+            SqliteJournalMode.Memory   => "MEMORY",
+            SqliteJournalMode.Wal      => "WAL",
+            SqliteJournalMode.Off      => "OFF",
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown journal mode")
+        };
+
         private void InitializeDatabase()
         {
-            using (var conn = GetSqLiteConnection())
+            using var conn = GetSqLiteConnection();
+            CreateSqlTable(conn);
+            if (_retentionPeriod.HasValue)
             {
-                CreateSqlTable(conn);
+                CreateTimestampIndex(conn);
             }
         }
 
-        private SQLiteConnection GetSqLiteConnection()
+        private SqliteConnection GetSqLiteConnection()
         {
-            var sqlConString = new SQLiteConnectionStringBuilder
+            var sqlConString = new SqliteConnectionStringBuilder
             {
                 DataSource = _databasePath,
-                JournalMode = SQLiteJournalModeEnum.Memory,
-                SyncMode = SynchronizationModes.Normal,
-                CacheSize = 500,
-                PageSize = (int)MaxSupportedPageSize,
-                MaxPageCount = (int)(_maxDatabaseSize * BytesPerMb / MaxSupportedPageSize)
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Cache = SqliteCacheMode.Default,
+                Pooling = true
             }.ConnectionString;
 
-            var sqLiteConnection = new SQLiteConnection(sqlConString);
-            sqLiteConnection.Open();
-
-            return sqLiteConnection;
+            var conn = new SqliteConnection(sqlConString);
+            conn.Open();
+            ConfigureConnection(conn);
+            return conn;
         }
 
-        private void CreateSqlTable(SQLiteConnection sqlConnection)
+        private void ConfigureConnection(SqliteConnection conn)
+        {
+            // PRAGMAs that the System.Data.SQLite connection-string builder exposed natively
+            // must be issued explicitly here. journal_mode is persisted in the DB file (one-time
+            // for WAL); the rest are session-scoped and re-applied on every Open.
+            var maxPageCount = _maxDatabaseSize * BytesPerMb / MaxSupportedPageSize;
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                $"PRAGMA journal_mode = {_journalMode};" +
+                "PRAGMA synchronous = NORMAL;" +
+                "PRAGMA cache_size = 500;" +
+                $"PRAGMA max_page_count = {maxPageCount};";
+            cmd.ExecuteNonQuery();
+        }
+
+        private void CreateSqlTable(SqliteConnection sqlConnection)
         {
             var colDefs = "id INTEGER PRIMARY KEY AUTOINCREMENT,";
             colDefs += "Timestamp TEXT,";
@@ -137,156 +170,206 @@ namespace Serilog.Sinks.SQLite
             colDefs += "RenderedMessage TEXT,";
             colDefs += "Properties TEXT";
 
-            var sqlCreateText = $"CREATE TABLE IF NOT EXISTS {_tableName} ({colDefs})";
-
-            var sqlCommand = new SQLiteCommand(sqlCreateText, sqlConnection);
+            using var sqlCommand = sqlConnection.CreateCommand();
+            sqlCommand.CommandText = $"CREATE TABLE IF NOT EXISTS {_quotedTable} ({colDefs})";
             sqlCommand.ExecuteNonQuery();
         }
 
-        private SQLiteCommand CreateSqlInsertCommand(SQLiteConnection connection)
+        private void CreateTimestampIndex(SqliteConnection sqlConnection)
         {
-            var sqlInsertText = "INSERT INTO {0} (Timestamp, Level, Exception, RenderedMessage, Properties)";
-            sqlInsertText += " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
-            sqlInsertText = string.Format(sqlInsertText, _tableName);
+            var indexName = QuoteIdent($"IX_{_tableName}_Timestamp");
+            using var sqlCommand = sqlConnection.CreateCommand();
+            sqlCommand.CommandText =
+                $"CREATE INDEX IF NOT EXISTS {indexName} ON {_quotedTable}(Timestamp)";
+            sqlCommand.ExecuteNonQuery();
+        }
 
-            var sqlCommand = connection.CreateCommand();
-            sqlCommand.CommandText = sqlInsertText;
-            sqlCommand.CommandType = CommandType.Text;
+        private SqliteCommand CreateSqlInsertCommand(SqliteConnection connection)
+        {
+            var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                $"INSERT INTO {_quotedTable} (Timestamp, Level, Exception, RenderedMessage, Properties)" +
+                " VALUES (@timeStamp, @level, @exception, @renderedMessage, @properties)";
 
-            sqlCommand.Parameters.Add(new SQLiteParameter("@timeStamp", DbType.DateTime2));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@level", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@exception", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@renderedMessage", DbType.String));
-            sqlCommand.Parameters.Add(new SQLiteParameter("@properties", DbType.String));
-
-            return sqlCommand;
+            cmd.Parameters.Add("@timeStamp", SqliteType.Text);
+            cmd.Parameters.Add("@level", SqliteType.Text);
+            cmd.Parameters.Add("@exception", SqliteType.Text);
+            cmd.Parameters.Add("@renderedMessage", SqliteType.Text);
+            cmd.Parameters.Add("@properties", SqliteType.Text);
+            return cmd;
         }
 
         private void ApplyRetentionPolicy()
         {
             var epoch = DateTimeOffset.Now.Subtract(_retentionPeriod.Value);
-            using (var sqlConnection = GetSqLiteConnection())
+            try
             {
-                using (var cmd = CreateSqlDeleteCommand(sqlConnection, epoch))
-                {
-                    SelfLog.WriteLine("Deleting log entries older than {0}", epoch);
-                    var ret = cmd.ExecuteNonQuery();
-                    SelfLog.WriteLine($"{ret} records deleted");
-                }
+                using var sqlConnection = GetSqLiteConnection();
+                using var cmd = CreateSqlDeleteCommand(sqlConnection, epoch);
+                SelfLog.WriteLine("Deleting log entries older than {0}", epoch);
+                var ret = cmd.ExecuteNonQuery();
+                SelfLog.WriteLine($"{ret} records deleted");
+            }
+            catch (Exception ex)
+            {
+                SelfLog.WriteLine($"Retention policy failed: {ex.Message}");
             }
         }
 
-        private void TruncateLog(SQLiteConnection sqlConnection)
+        private void TruncateAndVacuum(SqliteConnection sqlConnection)
         {
-            var cmd = sqlConnection.CreateCommand();
-            cmd.CommandText = $"DELETE FROM {_tableName}";
-            cmd.ExecuteNonQuery();
-
-            VacuumDatabase(sqlConnection);
+            using (var cmd = sqlConnection.CreateCommand())
+            {
+                cmd.CommandText = $"DELETE FROM {_quotedTable}";
+                cmd.ExecuteNonQuery();
+            }
+            // Pooled idle connections retain file locks that block VACUUM. Drop them first.
+            SqliteConnection.ClearPool(sqlConnection);
+            using (var cmd = sqlConnection.CreateCommand())
+            {
+                cmd.CommandText = "VACUUM";
+                cmd.ExecuteNonQuery();
+            }
         }
 
-        private void VacuumDatabase(SQLiteConnection sqlConnection)
+        private SqliteCommand CreateSqlDeleteCommand(SqliteConnection sqlConnection, DateTimeOffset epoch)
         {
             var cmd = sqlConnection.CreateCommand();
-            cmd.CommandText = $"vacuum";
-            cmd.ExecuteNonQuery();
-        }
-
-        private SQLiteCommand CreateSqlDeleteCommand(SQLiteConnection sqlConnection, DateTimeOffset epoch)
-        {
-            var cmd = sqlConnection.CreateCommand();
-            cmd.CommandText = $"DELETE FROM {_tableName} WHERE Timestamp < @epoch";
-            cmd.Parameters.Add(
-                new SQLiteParameter("@epoch", DbType.DateTime2)
-                {
-                    Value = (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString(
-                        TimestampFormat)
-                });
-
+            cmd.CommandText = $"DELETE FROM {_quotedTable} WHERE Timestamp < @epoch";
+            cmd.Parameters.Add("@epoch", SqliteType.Text).Value =
+                (_storeTimestampInUtc ? epoch.ToUniversalTime() : epoch).ToString(TimestampFormat);
             return cmd;
         }
 
         protected override async Task<bool> WriteLogEventAsync(ICollection<LogEvent> logEventsBatch)
         {
-            if ((logEventsBatch == null) || (logEventsBatch.Count == 0))
+            if (logEventsBatch == null || logEventsBatch.Count == 0)
                 return true;
-            await semaphoreSlim.WaitAsync().ConfigureAwait(false);
+
+            var rows = PrepareRows(logEventsBatch);
+
+            // BatchProvider.PumpAsync calls this serially, so no additional locking is needed.
+            using var sqlConnection = GetSqLiteConnection();
             try
             {
-                using (var sqlConnection = GetSqLiteConnection())
-                {
-                    try
-                    {
-                        await WriteToDatabaseAsync(logEventsBatch, sqlConnection).ConfigureAwait(false);
-                        return true;
-                    }
-                    catch (SQLiteException e)
-                    {
-                        SelfLog.WriteLine(e.Message);
-
-                        if (e.ResultCode != SQLiteErrorCode.Full)
-                            return false;
-
-                        if (_rollOver == false)
-                        {
-                            SelfLog.WriteLine("Discarding log excessive of max database");
-
-                            return true;
-                        }
-
-                        var dbExtension = Path.GetExtension(_databasePath);
-
-                        var newFilePath = Path.Combine(Path.GetDirectoryName(_databasePath) ?? "Logs",
-                            $"{Path.GetFileNameWithoutExtension(_databasePath)}-{DateTime.Now:yyyyMMdd_HHmmss.ff}{dbExtension}");
-                         
-                        File.Copy(_databasePath, newFilePath, true);
-
-                        TruncateLog(sqlConnection);
-                        await WriteToDatabaseAsync(logEventsBatch, sqlConnection).ConfigureAwait(false);
-
-                        SelfLog.WriteLine($"Rolling database to {newFilePath}");
-                        return true;
-                    }
-                    catch (Exception e)
-                    {
-                        SelfLog.WriteLine(e.Message);
-                        return false;
-                    }
-                }
+                await WriteToDatabaseAsync(rows, sqlConnection).ConfigureAwait(false);
+                return true;
             }
-            finally
+            catch (SqliteException e)
             {
-                semaphoreSlim.Release();
+                SelfLog.WriteLine(e.Message);
+
+                if (e.SqliteErrorCode != SqliteFullErrorCode)
+                    return false;
+
+                if (_rollOver == false)
+                {
+                    SelfLog.WriteLine("Discarding log excessive of max database");
+                    return true;
+                }
+
+                var dbExtension = Path.GetExtension(_databasePath);
+                var dbDir = Path.GetDirectoryName(_databasePath) ?? "Logs";
+                var rollSuffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+                var newFilePath = Path.Combine(dbDir,
+                    $"{Path.GetFileNameWithoutExtension(_databasePath)}-{DateTime.Now:yyyyMMdd_HHmmss.ff}-{rollSuffix}{dbExtension}");
+
+                // VACUUM INTO creates an atomic, consistent copy at the destination path.
+                // It includes any WAL contents and does not require copying sidecar files.
+                // SQLite parses the path as a string literal, so we double up any embedded quotes.
+                using (var cmd = sqlConnection.CreateCommand())
+                {
+                    var escapedPath = newFilePath.Replace("'", "''");
+                    cmd.CommandText = $"VACUUM INTO '{escapedPath}'";
+                    cmd.ExecuteNonQuery();
+                }
+
+                TruncateAndVacuum(sqlConnection);
+                await WriteToDatabaseAsync(rows, sqlConnection).ConfigureAwait(false);
+
+                SelfLog.WriteLine($"Rolling database to {newFilePath}");
+                return true;
+            }
+            catch (Exception e)
+            {
+                SelfLog.WriteLine(e.Message);
+                return false;
             }
         }
 
-        private async Task WriteToDatabaseAsync(ICollection<LogEvent> logEventsBatch, SQLiteConnection sqlConnection)
+        private List<PreparedRow> PrepareRows(ICollection<LogEvent> logEventsBatch)
         {
-            using (var tr = sqlConnection.BeginTransaction())
+            var rows = new List<PreparedRow>(logEventsBatch.Count);
+            foreach (var logEvent in logEventsBatch)
             {
-                using (var sqlCommand = CreateSqlInsertCommand(sqlConnection))
+                var timestamp = (_storeTimestampInUtc
+                    ? logEvent.Timestamp.ToUniversalTime()
+                    : logEvent.Timestamp).ToString(TimestampFormat);
+
+                var rendered = logEvent.MessageTemplate.Render(logEvent.Properties, _formatProvider);
+
+                var props = logEvent.Properties.Count > 0
+                    ? logEvent.Properties.Json()
+                    : null;
+
+                rows.Add(new PreparedRow(
+                    timestamp,
+                    logEvent.Level.ToString(),
+                    logEvent.Exception?.ToString(),
+                    rendered,
+                    props));
+            }
+            return rows;
+        }
+
+        private async Task WriteToDatabaseAsync(List<PreparedRow> rows, SqliteConnection sqlConnection)
+        {
+            using var tr = sqlConnection.BeginTransaction();
+            using var sqlCommand = CreateSqlInsertCommand(sqlConnection);
+            sqlCommand.Transaction = tr;
+
+            foreach (var row in rows)
+            {
+                sqlCommand.Parameters["@timeStamp"].Value = row.Timestamp;
+                sqlCommand.Parameters["@level"].Value = row.Level;
+                sqlCommand.Parameters["@exception"].Value = (object)row.Exception ?? DBNull.Value;
+                sqlCommand.Parameters["@renderedMessage"].Value = (object)row.RenderedMessage ?? DBNull.Value;
+                sqlCommand.Parameters["@properties"].Value = (object)row.Properties ?? DBNull.Value;
+                await sqlCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
+            }
+            tr.Commit();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _retentionTimer != null)
+            {
+                using var wh = new ManualResetEvent(false);
+                if (_retentionTimer.Dispose(wh))
                 {
-                    sqlCommand.Transaction = tr;
-
-                    foreach (var logEvent in logEventsBatch)
-                    {
-                        sqlCommand.Parameters["@timeStamp"].Value = _storeTimestampInUtc
-                            ? logEvent.Timestamp.ToUniversalTime().ToString(TimestampFormat)
-                            : logEvent.Timestamp.ToString(TimestampFormat);
-                        sqlCommand.Parameters["@level"].Value = logEvent.Level.ToString();
-                        sqlCommand.Parameters["@exception"].Value =
-                            logEvent.Exception?.ToString() ?? string.Empty;
-                        sqlCommand.Parameters["@renderedMessage"].Value = logEvent.MessageTemplate.Render(logEvent.Properties, _formatProvider);
-
-                        sqlCommand.Parameters["@properties"].Value = logEvent.Properties.Count > 0
-                            ? logEvent.Properties.Json()
-                            : string.Empty;
-
-                        await sqlCommand.ExecuteNonQueryAsync().ConfigureAwait(false);
-                    }
-                    tr.Commit();
+                    wh.WaitOne(TimeSpan.FromSeconds(30));
                 }
             }
+
+            base.Dispose(disposing);
+        }
+
+        private readonly struct PreparedRow
+        {
+            public PreparedRow(string timestamp, string level, string exception, string renderedMessage, string properties)
+            {
+                Timestamp = timestamp;
+                Level = level;
+                Exception = exception;
+                RenderedMessage = renderedMessage;
+                Properties = properties;
+            }
+
+            public string Timestamp { get; }
+            public string Level { get; }
+            public string Exception { get; }
+            public string RenderedMessage { get; }
+            public string Properties { get; }
         }
     }
 }

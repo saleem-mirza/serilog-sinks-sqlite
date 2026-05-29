@@ -2,10 +2,13 @@ echo "build: Build started"
 
 Push-Location $PSScriptRoot
 
-if(Test-Path .\artifacts) {
-	echo "build: Cleaning .\artifacts"
-	Remove-Item .\artifacts -Force -Recurse
+$artifactsDir = Join-Path $PSScriptRoot 'artifacts'
+
+if (Test-Path $artifactsDir) {
+    echo "build: Cleaning $artifactsDir"
+    Remove-Item $artifactsDir -Force -Recurse
 }
+
 & dotnet restore --no-cache
 
 $branch = @{ $true = $env:APPVEYOR_REPO_BRANCH; $false = $(git symbolic-ref --short -q HEAD) }[$env:APPVEYOR_REPO_BRANCH -ne $NULL];
@@ -14,6 +17,6 @@ $suffix = @{ $true = ""; $false = "--version-suffix=$($branch.Substring(0, [math
 
 echo "build: Version suffix is $suffix"
 
-& dotnet pack -c Release -o ..\..\artifacts $suffix
+& dotnet pack -c Release -o $artifactsDir $suffix
 
 Pop-Location

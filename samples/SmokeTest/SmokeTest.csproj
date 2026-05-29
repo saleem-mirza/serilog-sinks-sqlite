@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <RollForward>LatestMajor</RollForward>
+        <Nullable>disable</Nullable>
+        <IsPackable>false</IsPackable>
+        <RootNamespace>SmokeTest</RootNamespace>
+        <LangVersion>latest</LangVersion>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Serilog.Sinks.SQLite\Serilog.Sinks.SQLite.csproj" />
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+    </ItemGroup>
+</Project>

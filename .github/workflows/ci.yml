@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj
+
+      - name: Build (Release, both TFMs)
+        run: dotnet build src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj -c Release --no-restore
+
+      - name: Pack
+        run: dotnet pack src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj -c Release -o artifacts --no-build
+
+      - name: Smoke test
+        run: dotnet run --project samples/SmokeTest/SmokeTest.csproj -c Release
+
+      - name: Upload package
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
