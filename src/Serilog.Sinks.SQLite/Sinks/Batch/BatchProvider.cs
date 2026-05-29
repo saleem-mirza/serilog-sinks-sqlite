@@ -233,38 +233,44 @@ namespace Serilog.Sinks.Batch
 
         private void FlushAndCloseEventHandlers()
         {
+            // Single-writer shutdown. The disposing thread is a *coordinator only* — it does
+            // not consume from either BlockingCollection and does not call WriteLogEventAsync
+            // itself. Each pipeline stage drains its own queue when it sees IsAddingCompleted
+            // and then exits, which lets the subclass's WriteLogEventAsync (e.g. the SQLite
+            // sink's rollover path) assume single-threaded entry. Doubling up here caused two
+            // concurrent VACUUM INTO + TruncateAndVacuum cycles to clobber each other's
+            // sibling backups.
             try
             {
                 SelfLog.WriteLine("Halting sink...");
 
                 _canStop = true;
                 _timerResetEvent.Set();
+
+                // EventPump drains _eventsCollection into _logEventBatch and exits when
+                // IsAddingCompleted is observed with an empty queue (Take throws
+                // InvalidOperationException, which the pump swallows).
                 _eventsCollection.CompleteAdding();
+                _eventPumpTask.Wait(TimeSpan.FromSeconds(60));
 
-                while (!_eventsCollection.IsCompleted)
-                {
-                    var logEvent = _eventsCollection.Take();
-                    _logEventBatch.Enqueue(logEvent);
-                    if (_logEventBatch.Count >= _batchSize)
-                    {
-                        FlushLogEventBatch();
-                    }
-                }
-
+                // Final partial batch (Count < _batchSize) won't have been flushed by
+                // EventPump's threshold check — push it out now.
                 FlushLogEventBatch();
 
+                // PumpAsync drains _batchEventsCollection the same way EventPump drains its
+                // own; without a cancellation, its Take returns batches until the collection
+                // is completed-and-empty.
                 _batchEventsCollection.CompleteAdding();
+                _batchTask.Wait(TimeSpan.FromSeconds(60));
 
+                _timerTask.Wait(TimeSpan.FromSeconds(60));
+
+                // Cancel last, only to release any internal waits that may still be parked.
                 _cancellationTokenSource.Cancel();
-
-                while (!_batchEventsCollection.IsCompleted)
-                {
-                    var eventBatch = _batchEventsCollection.Take();
-                    WriteLogEventAsync(eventBatch).ConfigureAwait(false).GetAwaiter().GetResult();
-                    SelfLog.WriteLine($"Sending batch of {eventBatch.Count} logs");
-                }
-
-                Task.WaitAll(new[] { _eventPumpTask, _batchTask, _timerTask }, TimeSpan.FromSeconds(60));
+            }
+            catch (AggregateException ex)
+            {
+                SelfLog.WriteLine(ex.Message);
             }
             catch (Exception ex)
             {
