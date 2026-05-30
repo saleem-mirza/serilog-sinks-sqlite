@@ -1,5 +1,7 @@
 # Serilog.Sinks.SQLite
 
+[![CI](https://github.com/saleem-mirza/serilog-sinks-sqlite/actions/workflows/ci.yml/badge.svg)](https://github.com/saleem-mirza/serilog-sinks-sqlite/actions/workflows/ci.yml)
+
 A lightweight, high-performance Serilog sink that writes to a SQLite database.
 
 ## Getting started
