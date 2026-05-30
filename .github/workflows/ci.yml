@@ -71,4 +71,4 @@ jobs:
         run: dotnet build -c Release --no-restore
 
       - name: Run smoke tests
-        run: dotnet run --project samples/SmokeTest -c Release --no-build < /dev/null
+        run: dotnet run --project samples/SmokeTest -c Release < /dev/null
