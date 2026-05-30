@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <AssemblyTitle>Serilog.Sinks.SQLite</AssemblyTitle>
         <Authors>Saleem Mirza</Authors>
@@ -6,17 +6,19 @@
         <Description>Serilog event sink that writes to SQLite database</Description>
         <PackageId>Serilog.Sinks.SQLite</PackageId>
         <PackageTags>serilog;logging;SQLite</PackageTags>
-        <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
         <RepositoryUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
-        <Copyright>Copyright © Zethian Inc. 2020-2030</Copyright>
-        <AssemblyVersion>6.0.0.0</AssemblyVersion>
-        <Version>6.0.0</Version>
+        <Copyright>Copyright © Zethian Inc. 2020-2026</Copyright>
+        <AssemblyVersion>7.0.0.0</AssemblyVersion>
+        <Version>7.0.0</Version>
         <SignAssembly>True</SignAssembly>
         <AssemblyOriginatorKeyFile>Serilog.snk</AssemblyOriginatorKeyFile>
-        <TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
-        <FileVersion>6.0.0.0</FileVersion>
+        <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+        <FileVersion>7.0.0.0</FileVersion>
+        <LangVersion>latest</LangVersion>
     </PropertyGroup>
     <PropertyGroup>
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
@@ -26,28 +28,23 @@
             <Pack>true</Pack>
             <PackagePath></PackagePath>
         </None>
+        <None Include="..\..\README.md">
+            <Pack>true</Pack>
+            <PackagePath></PackagePath>
+        </None>
+        <None Include="..\..\icon.png">
+            <Pack>true</Pack>
+            <PackagePath></PackagePath>
+        </None>
     </ItemGroup>
-    <PropertyGroup>
-        <ContentSQLiteInteropFiles>true</ContentSQLiteInteropFiles>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(VersionSuffix)'!='' ">
         <Version>$(Version)-$(VersionSuffix)</Version>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="Serilog" Version="2.12.0" />
-        <PackageReference Include="SQLite" Version="3.13.0" />
-        <PackageReference Include="System.Data.SQLite.Core" Version="1.0.115.5" />
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+        <PackageReference Include="Serilog" Version="4.3.1" />
     </ItemGroup>
     <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-      <PackageReference Include="Microsoft.Data.Sqlite.Core">
-        <Version>7.0.5</Version>
-      </PackageReference>
-    </ItemGroup>
-    <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
-      <PackageReference Include="Microsoft.Data.Sqlite.Core">
-        <Version>7.0.5</Version>
-      </PackageReference>
+        <PackageReference Include="System.Text.Json" Version="8.0.5" />
     </ItemGroup>
 </Project>
