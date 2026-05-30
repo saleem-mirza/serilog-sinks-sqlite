@@ -14,7 +14,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Serilog.Debugging;
@@ -100,7 +99,12 @@ namespace Serilog.Sinks.Extensions
             }
 
             if (data is SequenceValue seq)
-                return seq.Elements.Select(Simplify).ToArray();
+            {
+                var arr = new object[seq.Elements.Count];
+                for (var i = 0; i < seq.Elements.Count; i++)
+                    arr[i] = Simplify(seq.Elements[i]);
+                return arr;
+            }
 
             if (!(data is StructureValue str))
                 return null;
@@ -108,10 +112,20 @@ namespace Serilog.Sinks.Extensions
             try
             {
                 if (str.TypeTag == null)
-                    return str.Properties.ToDictionary(p => p.Name, p => Simplify(p.Value));
+                {
+                    var d = new Dictionary<string, object>(str.Properties.Count);
+                    foreach (var p in str.Properties)
+                        d[p.Name] = Simplify(p.Value);
+                    return d;
+                }
 
                 if (!str.TypeTag.StartsWith("DictionaryEntry") && !str.TypeTag.StartsWith("KeyValuePair"))
-                    return str.Properties.ToDictionary(p => p.Name, p => Simplify(p.Value));
+                {
+                    var d = new Dictionary<string, object>(str.Properties.Count);
+                    foreach (var p in str.Properties)
+                        d[p.Name] = Simplify(p.Value);
+                    return d;
+                }
 
                 var key = Simplify(str.Properties[0].Value);
                 if (key == null)

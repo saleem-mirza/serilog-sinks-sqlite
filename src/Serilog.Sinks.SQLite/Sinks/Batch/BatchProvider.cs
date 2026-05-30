@@ -17,7 +17,6 @@ using Serilog.Events;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -139,7 +138,7 @@ namespace Serilog.Sinks.Batch
             {
                 _semaphoreSlim.Wait(_cancellationTokenSource.Token);
 
-                if (!_logEventBatch.Any())
+                if (_logEventBatch.IsEmpty)
                 {
                     return;
                 }

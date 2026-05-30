@@ -6,7 +6,8 @@
         <Description>Serilog event sink that writes to SQLite database</Description>
         <PackageId>Serilog.Sinks.SQLite</PackageId>
         <PackageTags>serilog;logging;SQLite</PackageTags>
-        <PackageIconUrl>http://serilog.net/images/serilog-sink-nuget.png</PackageIconUrl>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageProjectUrl>http://serilog.net</PackageProjectUrl>
         <RepositoryUrl>https://github.com/saleem-mirza/serilog-sinks-sqlite</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
@@ -24,6 +25,14 @@
     </PropertyGroup>
     <ItemGroup>
         <None Include="..\..\LICENSE">
+            <Pack>true</Pack>
+            <PackagePath></PackagePath>
+        </None>
+        <None Include="..\..\README.md">
+            <Pack>true</Pack>
+            <PackagePath></PackagePath>
+        </None>
+        <None Include="..\..\icon.png">
             <Pack>true</Pack>
             <PackagePath></PackagePath>
         </None>

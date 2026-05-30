@@ -1,41 +1,74 @@
-name: ci
+name: CI
 
 on:
   push:
-    branches: [dev, master]
   pull_request:
-    branches: [dev, master]
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
+    name: Build & Pack
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.artifact-name.outputs.name }}
 
-      - uses: actions/setup-dotnet@v4
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Compute artifact name and version suffix
+        id: artifact-name
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          SAFE="${BRANCH//\//-}"
+          if [ "$SAFE" = "master" ]; then
+            echo "name=nuget-packages" >> $GITHUB_OUTPUT
+            echo "suffix=" >> $GITHUB_OUTPUT
+          else
+            echo "name=nuget-packages-${SAFE}" >> $GITHUB_OUTPUT
+            echo "suffix=${SAFE}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5.3.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj
+        run: dotnet restore
 
-      - name: Build (Release, both TFMs)
-        run: dotnet build src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj -c Release --no-restore
+      - name: Build
+        run: dotnet build -c Release --no-restore
 
       - name: Pack
-        run: dotnet pack src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj -c Release -o artifacts --no-build
+        run: |
+          SUFFIX="${{ steps.artifact-name.outputs.suffix }}"
+          SUFFIX_ARG=$( [ -n "$SUFFIX" ] && echo "--version-suffix $SUFFIX" || echo "" )
+          dotnet pack src/Serilog.Sinks.SQLite/Serilog.Sinks.SQLite.csproj -c Release --no-build -o artifacts $SUFFIX_ARG
 
-      - name: Smoke test
-        run: dotnet run --project samples/SmokeTest/SmokeTest.csproj -c Release
-
-      - name: Upload package
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v6.0.0
         with:
-          name: nupkg
-          path: artifacts/*.nupkg
-          if-no-files-found: error
+          name: ${{ steps.artifact-name.outputs.name }}
+          path: artifacts/Serilog.*.nupkg
+          retention-days: 7
+
+  test:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v5.3.0
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Run smoke tests
+        run: dotnet run --project samples/SmokeTest -c Release --no-build < /dev/null
